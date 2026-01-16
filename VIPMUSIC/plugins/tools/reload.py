@@ -77,7 +77,7 @@ async def restartbot(client, message: Message, _):
 
 
 @app.on_callback_query(filters.regex("close") & ~BANNED_USERS)
-async def close_menu(_, CallbackQuery):
+async def close_menu(_, CallbackQuery: CallbackQuery):
     try:
         await CallbackQuery.message.delete()
         await CallbackQuery.answer()
@@ -88,18 +88,8 @@ async def close_menu(_, CallbackQuery):
                 chat_id=CallbackQuery.message.chat.id,
                 message_ids=CallbackQuery.message.id,
             )
-        except Exception as e:
-            logging.exception(e)
+        except:
             return
-
-
-@app.on_callback_query(filters.regex("close") & ~BANNED_USERS)
-async def close_menu(_, CallbackQuery):
-    try:
-        await CallbackQuery.message.delete()
-        await CallbackQuery.answer()
-    except:
-        return
 
 
 @app.on_callback_query(filters.regex("stop_downloading") & ~BANNED_USERS)
