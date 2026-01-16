@@ -23,6 +23,7 @@ from git.exc import GitCommandError, InvalidGitRepositoryError
 from pyrogram import filters
 
 import config
+from config import OWNER_ID
 from strings import get_command
 from VIPMUSIC import app
 from VIPMUSIC.misc import HAPP, SUDOERS, XCB
@@ -44,6 +45,7 @@ UPDATE_COMMAND = get_command("UPDATE_COMMAND")
 RESTART_COMMAND = get_command("RESTART_COMMAND")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+HEROKU_APP_NAME = os.getenv("HEROKU_APP_NAME")
 
 
 async def is_heroku():
@@ -87,7 +89,7 @@ async def log_(client, message, _):
         await message.reply_text(_["heroku_2"])
 
 
-@app.on_message(filters.command(GETVAR_COMMAND) & SUDOERS)
+@app.on_message(filters.command(GETVAR_COMMAND) & filters.user(OWNER_ID))
 @language
 async def varget_(client, message, _):
     usage = _["heroku_3"]
@@ -115,7 +117,7 @@ async def varget_(client, message, _):
             return await message.reply_text(f"**{check_var}:** `{str(output)}`")
 
 
-@app.on_message(filters.command(DELVAR_COMMAND) & SUDOERS)
+@app.on_message(filters.command(DELVAR_COMMAND) & filters.user(OWNER_ID))
 @language
 async def vardel_(client, message, _):
     usage = _["heroku_6"]
@@ -143,7 +145,7 @@ async def vardel_(client, message, _):
             os.system(f"kill -9 {os.getpid()} && python3 -m VIPMUSIC")
 
 
-@app.on_message(filters.command(SETVAR_COMMAND) & SUDOERS)
+@app.on_message(filters.command(SETVAR_COMMAND) & filters.user(OWNER_ID))
 @language
 async def set_var(client, message, _):
     usage = _["heroku_8"]
@@ -172,7 +174,7 @@ async def set_var(client, message, _):
         os.system(f"kill -9 {os.getpid()} && python3 -m VIPMUSIC")
 
 
-@app.on_message(filters.command(USAGE_COMMAND) & SUDOERS)
+@app.on_message(filters.command(USAGE_COMMAND) & filters.user(OWNER_ID))
 @language
 async def usage_dynos(client, message, _):
     ### Credits CatUserbot

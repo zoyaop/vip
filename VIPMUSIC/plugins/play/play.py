@@ -12,19 +12,18 @@ import random
 import string
 from time import time
 
-import httpx
 from pyrogram import filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardMarkup, InputMediaPhoto, Message
 from pytgcalls.exceptions import NoActiveGroupCall
 
 import config
-from config import BANNED_USERS, lyrical
-from VIPMUSIC import Apple, Resso, SoundCloud, Spotify, Telegram, YouTube, app
+from config import BANNED_USERS, LOG_GROUP_ID, OWNER_ID, lyrical
+from VIPMUSIC import LOGGER, Apple, Resso, SoundCloud, Spotify, Telegram, YouTube, app
 from VIPMUSIC.core.call import VIP
 from VIPMUSIC.utils import seconds_to_min, time_to_seconds
 from VIPMUSIC.utils.channelplay import get_channeplayCB
-from VIPMUSIC.utils.database import add_served_chat, is_video_allowed
+from VIPMUSIC.utils.database import add_served_chat, get_assistant, is_video_allowed
 from VIPMUSIC.utils.decorators.language import languageCB
 from VIPMUSIC.utils.decorators.play import PlayWrapper
 from VIPMUSIC.utils.formatters import formats
@@ -40,27 +39,10 @@ from VIPMUSIC.utils.stream.stream import stream
 
 user_last_message_time = {}
 user_command_count = {}
-# Define the threshold for command spamming (e.g., 20 commands within 60 seconds)
+SPAM_WINDOW_SECONDS = 5  # Set the time window for spam checks (5 seconds for example)
 SPAM_THRESHOLD = 2
-SPAM_WINDOW_SECONDS = 5
 
-
-async def is_streamable_url(url: str) -> bool:
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=5)
-            if response.status_code == 200:
-                content_type = response.headers.get("Content-Type", "")
-                if (
-                    "application/vnd.apple.mpegurl" in content_type
-                    or "application/x-mpegURL" in content_type
-                ):
-                    return True
-                if url.endswith(".m3u8") or url.endswith(".index"):
-                    return True
-    except httpx.RequestError:
-        pass
-    return False
+# audio = "CQACAgUAAx0CdRUi1wABAUYuZx3rQCprbybe1cDBm-2qK28Pro0AAqcRAAIdP_BUu66Uhq1OkKseBA"
 
 
 @app.on_message(
@@ -69,7 +51,6 @@ async def is_streamable_url(url: str) -> bool:
             "play",
             "vplay",
             "cplay",
-            "cute",
             "cvplay",
             "playforce",
             "vplayforce",
@@ -82,42 +63,38 @@ async def is_streamable_url(url: str) -> bool:
     & ~BANNED_USERS
 )
 @PlayWrapper
-async def play_commnd(
-    client,
-    message: Message,
-    _,
-    chat_id,
-    video,
-    channel,
-    playmode,
-    url,
-    fplay,
+async def play_command(
+    client, message: Message, _, chat_id, video, channel, playmode, url, fplay
 ):
+
+    userbot = await get_assistant(message.chat.id)
+    userbot_id = userbot.id
     user_id = message.from_user.id
     current_time = time()
-    # Update the last message timestamp for the user
     last_message_time = user_last_message_time.get(user_id, 0)
+    user_last_message_time[user_id] = current_time
 
+    # Spam check logic
     if current_time - last_message_time < SPAM_WINDOW_SECONDS:
-        # If less than the spam window time has passed since the last message
         user_last_message_time[user_id] = current_time
         user_command_count[user_id] = user_command_count.get(user_id, 0) + 1
         if user_command_count[user_id] > SPAM_THRESHOLD:
-            # Block the user if they exceed the threshold
             hu = await message.reply_text(
-                f"**{message.from_user.mention} ᴘʟᴇᴀsᴇ ᴅᴏɴᴛ ᴅᴏ sᴘᴀᴍ, ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ ᴀғᴛᴇʀ 5 sᴇᴄ**"
+                f"**{message.from_user.mention} ᴘʟᴇᴀsᴇ ᴅᴏɴ'ᴛ sᴘᴀᴍ, ᴛʀʏ ᴀɢᴀɪɴ ᴀғᴛᴇʀ 5 sᴇᴄᴏɴᴅs.**"
             )
             await asyncio.sleep(3)
             await hu.delete()
             return
     else:
-        # If more than the spam window time has passed, reset the command count and update the message timestamp
         user_command_count[user_id] = 1
         user_last_message_time[user_id] = current_time
+
+    # Proceed with adding the chat and sending response
     await add_served_chat(message.chat.id)
     mystic = await message.reply_text(
         _["play_2"].format(channel) if channel else _["play_1"]
     )
+
     plist_id = None
     slider = None
     plist_type = None
@@ -169,6 +146,7 @@ async def play_commnd(
             except Exception as e:
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_3"].format(ex_type)
+                LOGGER(__name__).error(f"{ex_type} {e}")
                 return await mystic.edit_text(err)
             return await mystic.delete()
         return
@@ -215,6 +193,7 @@ async def play_commnd(
             except Exception as e:
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_3"].format(ex_type)
+                LOGGER(__name__).error(f"{ex_type} {e}")
                 return await mystic.edit_text(err)
             return await mystic.delete()
         return
@@ -324,7 +303,16 @@ async def play_commnd(
                 cap = _["play_13"].format(message.from_user.first_name)
                 img = url
             else:
-                return await mystic.edit_text(_["play_16"])
+                await mystic.delete()
+                await app.send_message(
+                    LOG_GROUP_ID,
+                    f"**ʜᴇʏ [ᴏᴡɴᴇʀ](tg://user?id={OWNER_ID[0]}) ᴍᴀʏ ʙᴇ ᴍʏ ᴄᴏᴏᴋɪᴇs ʜᴀs ʙᴇᴇɴ ᴅᴇᴀᴅ ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴏɴᴇ ᴛɪᴍᴇ ʙʏ ᴘʟᴀʏ ᴀɴʏ sᴏɴɢs**",
+                )
+                return await app.send_message(
+                    OWNER_ID[0],
+                    f"**ʜᴇʏ [ᴏᴡɴᴇʀ](tg://user?id={OWNER_ID[0]}) ᴍᴀʏ ʙᴇ ᴍʏ ᴄᴏᴏᴋɪᴇs ʜᴀs ʙᴇᴇɴ ᴅᴇᴀᴅ ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴏɴᴇ ᴛɪᴍᴇ ʙʏ ᴘʟᴀʏ ᴀɴʏ sᴏɴɢs**",
+                )
+
         elif await Resso.valid(url):
             try:
                 details, track_id = await Resso.track(url)
@@ -361,6 +349,7 @@ async def play_commnd(
             except Exception as e:
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_3"].format(ex_type)
+                LOGGER(__name__).error(f"{ex_type} {e}")
                 return await mystic.edit_text(err)
             return await mystic.delete()
         else:
@@ -397,6 +386,7 @@ async def play_commnd(
             except Exception as e:
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_3"].format(ex_type)
+                LOGGER(__name__).error(f"{ex_type} {e}")
                 return await mystic.edit_text(err)
             return await play_logs(message, streamtype="M3u8 or Index Link")
     else:
@@ -456,6 +446,7 @@ async def play_commnd(
         except Exception as e:
             ex_type = type(e).__name__
             err = e if ex_type == "AssistantErr" else _["general_3"].format(ex_type)
+            LOGGER(__name__).error(f"{ex_type} {e}")
             try:
                 return await mystic.edit_text(err)
             except FloodWait as e:
@@ -586,6 +577,7 @@ async def play_music(client, CallbackQuery, _):
     except Exception as e:
         ex_type = type(e).__name__
         err = e if ex_type == "AssistantErr" else _["general_3"].format(ex_type)
+        LOGGER(__name__).error(f"{ex_type} {e}")
         return await mystic.edit_text(err)
     return await mystic.delete()
 

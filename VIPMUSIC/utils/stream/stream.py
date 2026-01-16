@@ -15,6 +15,7 @@ from typing import Union
 from pyrogram.types import InlineKeyboardMarkup
 
 import config
+from config import LOG_GROUP_ID, OWNER_ID
 from VIPMUSIC import Carbon, YouTube, app
 from VIPMUSIC.core.call import VIP
 from VIPMUSIC.misc import db
@@ -96,7 +97,16 @@ async def stream(
                         vidid, mystic, video=status, videoid=True
                     )
                 except:
-                    raise AssistantErr(_["play_16"])
+                    await mystic.delete()
+                    await app.send_message(
+                        LOG_GROUP_ID,
+                        f"**ʜᴇʏ [ᴏᴡɴᴇʀ](tg://user?id={OWNER_ID[0]}) ᴍᴀʏ ʙᴇ ᴍʏ ᴄᴏᴏᴋɪᴇs ʜᴀs ʙᴇᴇɴ ᴅᴇᴀᴅ ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴏɴᴇ ᴛɪᴍᴇ ʙʏ ᴘʟᴀʏ ᴀɴʏ sᴏɴɢs**",
+                    )
+                    return await app.send_message(
+                        OWNER_ID[0],
+                        f"**ʜᴇʏ [ᴏᴡɴᴇʀ](tg://user?id={OWNER_ID[0]}) ᴍᴀʏ ʙᴇ ᴍʏ ᴄᴏᴏᴋɪᴇs ʜᴀs ʙᴇᴇɴ ᴅᴇᴀᴅ ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴏɴᴇ ᴛɪᴍᴇ ʙʏ ᴘʟᴀʏ ᴀɴʏ sᴏɴɢs**",
+                    )
+
                 await VIP.join_call(
                     chat_id, original_chat_id, file_path, video=status, image=thumbnail
                 )
@@ -156,7 +166,16 @@ async def stream(
                 vidid, mystic, videoid=True, video=status
             )
         except:
-            raise AssistantErr(_["play_16"])
+            await mystic.delete()
+            await app.send_message(
+                LOG_GROUP_ID,
+                f"**ʜᴇʏ [ᴏᴡɴᴇʀ](tg://user?id={OWNER_ID[0]}) ᴍᴀʏ ʙᴇ ᴍʏ ᴄᴏᴏᴋɪᴇs ʜᴀs ʙᴇᴇɴ ᴅᴇᴀᴅ ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴏɴᴇ ᴛɪᴍᴇ ʙʏ ᴘʟᴀʏ ᴀɴʏ sᴏɴɢs**",
+            )
+            return await app.send_message(
+                OWNER_ID[0],
+                f"**ʜᴇʏ [ᴏᴡɴᴇʀ](tg://user?id={OWNER_ID[0]}) ᴍᴀʏ ʙᴇ ᴍʏ ᴄᴏᴏᴋɪᴇs ʜᴀs ʙᴇᴇɴ ᴅᴇᴀᴅ ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴏɴᴇ ᴛɪᴍᴇ ʙʏ ᴘʟᴀʏ ᴀɴʏ sᴏɴɢs**",
+            )
+
         if await is_active_chat(chat_id):
             await put_queue(
                 chat_id,

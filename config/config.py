@@ -6,6 +6,7 @@
 # Please see < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE >
 #
 # All rights reserved.
+import os
 import re
 from os import getenv
 
@@ -26,7 +27,6 @@ API_HASH = getenv("API_HASH")
 BOT_TOKEN = getenv("BOT_TOKEN")
 
 
-# Database to save your chats and stats... Get MongoDB:-  https://telegra.ph/How-To-get-Mongodb-URI-04-06
 MONGO_DB_URI = getenv("MONGO_DB_URI", None)
 
 
@@ -69,7 +69,7 @@ SONG_DOWNLOAD_DURATION = int(
 
 
 # You'll need a Private Group ID for this.
-LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", ""))
+LOG_GROUP_ID = getenv("LOG_GROUP_ID", "")
 
 
 # Your User ID.
@@ -105,6 +105,14 @@ GIT_TOKEN = getenv(
     "",
 )
 
+# Token allow for access youtube songs. [ True = use token data, False = use cookies ]
+TOKEN_ALLOW = os.getenv("TOKEN_ALLOW", "False")
+
+# Auto Gcast/Broadcast Handler, Write:- [On / Off] During Hosting.
+AUTO_GCAST = os.getenv("AUTO_GCAST", "on")
+
+# Auto Broadcast Message That You Want Use In Auto Broadcast In All Groups.
+AUTO_GCAST_MSG = getenv("AUTO_GCAST_MSG", "")
 
 # Only  Links formats are  accepted for this Var value.
 SUPPORT_CHANNEL = getenv(
