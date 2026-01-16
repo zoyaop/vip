@@ -31,10 +31,8 @@ MONGO_DB_URI = getenv("MONGO_DB_URI", None)
 
 # -----------------------------------------------------------------
 # YOUTUBE API KEYS (MULTI-KEY SUPPORT)
-# यहाँ अपनी सभी Keys को कोमा (,) लगाकर डालें। 
-# उदाहरण: "key1, key2, key3"
 # -----------------------------------------------------------------
-API_KEY = getenv("API_KEY", "AIzaSyB1AXaaVTAAnbU43JkpkbeEl0Ej-sEXSDw, AIzaSyCle_ElS0drPEw95NU9rwW39qu06OY4dD8",)
+API_KEY = getenv("API_KEY", "AIzaSyC_yPuJD0S75qMQFg-WobboAEPRjHXpl1M, AIzaSyB5ofI6tA5S-fX1cCKvXuompJKnJRiv1SE")
 # -----------------------------------------------------------------
 
 CLEANMODE_DELETE_MINS = int(
@@ -88,7 +86,7 @@ OWNER_ID = list(
 # make your bots privacy from telegra.ph and put your url here
 
 PRIVACY_LINK = getenv(
-    "PRIVACY_LINK", "https://telegra.ph/Privacy-Policy-for-VIPMUSIC-08-30"
+    "PRIVACY_LINK", "https://telegra.ph/AAUR-MUSIC-BOT-01-16"
 )
 
 
@@ -226,17 +224,17 @@ autoclean = []
 
 START_IMG_URL = getenv(
     "START_IMG_URL",
-    "https://te.legra.ph/file/ecdeac045f4045c198bd6.jpg",
+    "https://graph.org/file/d8297f4d72be6101f2e50-0a1dc2bb9f352f4b9b.jpg",
 )
 
 PING_IMG_URL = getenv(
     "PING_IMG_URL",
-    "https://telegra.ph/file/91533956c91d0fd7c9f20.jpg",
+    "https://graph.org/file/dc8554b746667df42fbef-47aa5f836432cd5d69.jpg",
 )
 
 PLAYLIST_IMG_URL = getenv(
     "PLAYLIST_IMG_URL",
-    "https://telegra.ph/file/f4edfbd83ec3150284aae.jpg",
+    "https://graph.org/file/d54db06441a57db35b7ed-9e3a479f0390b6ccf5.jpg",
 )
 
 GLOBAL_IMG_URL = getenv(
