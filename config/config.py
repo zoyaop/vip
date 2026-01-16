@@ -33,7 +33,7 @@ MONGO_DB_URI = getenv("MONGO_DB_URI", None)
 # यहाँ अपनी सभी Keys को कोमा (,) लगाकर डालें। 
 # उदाहरण: "key1, key2, key3"
 # -----------------------------------------------------------------
-API_KEY = getenv("API_KEY", "AIzaSyB1AXaaVTAAnbU43JkpkbeEl0Ej-sEXSDw, AIzaSyCle_ElS0drPEw95NU9rwW39qu06OY4dD8",)
+API_KEY = getenv("API_KEY", "AIzaSyAurKSn9YNaY34MBogPzcR1YJ-bvmInm7U, AIzaSyCApVjCS5KA8xIVhqPTq0IdNriVv95Tnq4, AIzaSyDlTU81AhslOne7AjKrFe_BLPBuTg0PbW0,")
 # -----------------------------------------------------------------
 
 CLEANMODE_DELETE_MINS = int(
