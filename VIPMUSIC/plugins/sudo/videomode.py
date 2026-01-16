@@ -3,9 +3,6 @@
 #
 # This file is part of < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC > project,
 # and is released under the MIT License.
-# Please see < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE >
-#
-# All rights reserved.
 #
 
 from pyrogram import filters
@@ -18,18 +15,20 @@ from VIPMUSIC.misc import SUDOERS
 from VIPMUSIC.utils.database import add_off, add_on
 from VIPMUSIC.utils.decorators.language import language
 
-# Commands
+# कमांड लोड करना
 VIDEOMODE_COMMAND = get_command("VIDEOMODE_COMMAND")
-
 
 @app.on_message(filters.command(VIDEOMODE_COMMAND) & SUDOERS)
 @language
 async def videoloaymode(client, message: Message, _):
     usage = _["vidmode_1"]
+    
+    # चेक करना कि कमांड के साथ सही शब्द लिखा है या नहीं
     if len(message.command) != 2:
         return await message.reply_text(usage)
-    state = message.text.split(None, 1)[1].strip()
-    state = state.lower()
+    
+    state = message.text.split(None, 1)[1].strip().lower()
+    
     if state == "download":
         await add_on(config.YTDOWNLOADER)
         await message.reply_text(_["vidmode_2"])
@@ -37,4 +36,5 @@ async def videoloaymode(client, message: Message, _):
         await add_off(config.YTDOWNLOADER)
         await message.reply_text(_["vidmode_3"])
     else:
+        # अगर यूजर ने 'download' या 'm3u8' के अलावा कुछ और लिखा
         await message.reply_text(usage)
