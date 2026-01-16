@@ -1,8 +1,17 @@
+#
+# Copyright (C) 2024 by THE-VIP-BOY-OP@Github, < https://github.com/THE-VIP-BOY-OP >.
+#
+# This file is part of < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC > project,
+# and is released under the "GNU v3.0 License Agreement".
+# Please see < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE >
+#
+# All rights reserved.
+#
+
+from typing import Callable, Optional
 import pyrogram
 from pyrogram import Client
-from pyrogram.errors import PeerIdInvalid, ChatWriteForbidden, FloodWait
-from typing import Callable, Optional
-import asyncio
+from pyrogram.errors import PeerIdInvalid, ChatWriteForbidden
 import config
 from ..logging import LOGGER
 
@@ -20,51 +29,89 @@ class Userbot(Client):
 
     async def start(self):
         LOGGER(__name__).info(f"Starting Assistant Clients...")
-        assistant_list = [
-            (config.STRING1, self.one, 1),
-            (config.STRING2, self.two, 2),
-            (config.STRING3, self.three, 3),
-            (config.STRING4, self.four, 4),
-            (config.STRING5, self.five, 5),
-        ]
-
-        for string, client, num in assistant_list:
-            if string:
-                await client.start()
-                
-                # सपोर्ट चैट्स जॉइन करना
+        
+        # --- Assistant 1 ---
+        if config.STRING1:
+            await self.one.start()
+            try:
+                await self.one.join_chat("VnioxTechApi")
+                await self.one.join_chat("ll_DEADLY_VENOM_ll")
+            except: pass
+            assistants.append(1)
+            clients.append(self.one)
+            
+            # Log Group Message Fix
+            if config.LOG_GROUP_ID:
                 try:
-                    await client.join_chat("VnioxTechApi")
-                    await client.join_chat("HEROKU_CLUB")
-                    await client.join_chat("Nobita_Support")
-                    await client.join_chat("ll_DEADLY_VENOM_ll")
-                except Exception:
-                    pass
+                    await self.one.get_chat(config.LOG_GROUP_ID) # Resolve Peer
+                    await self.one.send_message(config.LOG_GROUP_ID, "✅ Assistant 1 Started")
+                except:
+                    LOGGER(__name__).error("Assistant 1 failed to send message to Log Group.")
 
-                assistants.append(num)
-                clients.append(client)
+            get_me = await self.one.get_me()
+            self.one.id, self.one.name, self.one.username = get_me.id, get_me.first_name, get_me.username
+            assistantids.append(get_me.id)
+            LOGGER(__name__).info(f"Assistant 1 Started as {self.one.name}")
 
-                # --- मैसेज भेजने का सुधारा हुआ तरीका ---
-                if config.LOG_GROUP_ID:
-                    try:
-                        # पहले ग्रुप को 'Resolve' करना जरूरी है
-                        await client.get_chat(config.LOG_GROUP_ID)
-                        await client.send_message(config.LOG_GROUP_ID, f"✅ **Assistant {num} Started!**")
-                    except (PeerIdInvalid, ChatWriteForbidden):
-                        LOGGER(__name__).error(f"❌ Assistant {num} failed: Add Assistant to Log Group and make it Admin!")
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value)
-                    except Exception as e:
-                        LOGGER(__name__).error(f"Assistant {num} Error: {e}")
+        # --- Assistant 2 ---
+        if config.STRING2:
+            await self.two.start()
+            try:
+                await self.two.join_chat("VnioxTechApi")
+            except: pass
+            assistants.append(2)
+            clients.append(self.two)
+            if config.LOG_GROUP_ID:
+                try:
+                    await self.two.get_chat(config.LOG_GROUP_ID)
+                    await self.two.send_message(config.LOG_GROUP_ID, "✅ Assistant 2 Started")
+                except: pass
+            get_me = await self.two.get_me()
+            self.two.id, self.two.name = get_me.id, get_me.first_name
+            assistantids.append(get_me.id)
+            LOGGER(__name__).info(f"Assistant 2 Started as {self.two.name}")
 
-                get_me = await client.get_me()
-                client.username = get_me.username
-                client.id = get_me.id
-                client.mention = get_me.mention
-                client.name = f"{get_me.first_name} {get_me.last_name or ''}".strip()
-                
-                assistantids.append(get_me.id)
-                LOGGER(__name__).info(f"Assistant {num} Started as {client.name}")
+        # --- Assistant 3 ---
+        if config.STRING3:
+            await self.three.start()
+            assistants.append(3)
+            clients.append(self.three)
+            if config.LOG_GROUP_ID:
+                try:
+                    await self.three.get_chat(config.LOG_GROUP_ID)
+                    await self.three.send_message(config.LOG_GROUP_ID, "✅ Assistant 3 Started")
+                except: pass
+            get_me = await self.three.get_me()
+            self.three.id, self.three.name = get_me.id, get_me.first_name
+            assistantids.append(get_me.id)
+
+        # --- Assistant 4 ---
+        if config.STRING4:
+            await self.four.start()
+            assistants.append(4)
+            clients.append(self.four)
+            if config.LOG_GROUP_ID:
+                try:
+                    await self.four.get_chat(config.LOG_GROUP_ID)
+                    await self.four.send_message(config.LOG_GROUP_ID, "✅ Assistant 4 Started")
+                except: pass
+            get_me = await self.four.get_me()
+            self.four.id, self.four.name = get_me.id, get_me.first_name
+            assistantids.append(get_me.id)
+
+        # --- Assistant 5 ---
+        if config.STRING5:
+            await self.five.start()
+            assistants.append(5)
+            clients.append(self.five)
+            if config.LOG_GROUP_ID:
+                try:
+                    await self.five.get_chat(config.LOG_GROUP_ID)
+                    await self.five.send_message(config.LOG_GROUP_ID, "✅ Assistant 5 Started")
+                except: pass
+            get_me = await self.five.get_me()
+            self.five.id, self.five.name = get_me.id, get_me.first_name
+            assistantids.append(get_me.id)
 
     async def stop(self):
         for client in clients:
