@@ -8,10 +8,10 @@ import asyncio
 import threading
 import uvloop
 from flask import Flask
-import pyrogram # <--- Missing import added
+import pyrogram 
 from pyrogram import Client, idle
 from pyrogram.enums import ChatMemberStatus
-from pyrogram.errors import ChatWriteForbidden, PeerIdInvalid # <--- Added PeerIdInvalid
+from pyrogram.errors import ChatWriteForbidden, PeerIdInvalid, FloodWait
 from pyrogram.types import (
     BotCommand,
     BotCommandScopeAllChatAdministrators,
@@ -68,28 +68,23 @@ class VIPBot(Client):
 
         if config.LOG_GROUP_ID:
             try:
+                # --- यहाँ सुधार किया गया है: पहले ग्रुप को ढूँढना (Resolve Peer) ---
+                await self.get_chat(config.LOG_GROUP_ID)
+                
                 await self.send_photo(
                     config.LOG_GROUP_ID,
                     photo=config.START_IMG_URL,
                     caption=f"╔════❰𝐖𝐄𝐋𝐂𝐎𝐌𝐄❱════❍⊱❁۪۪\n║\n║┣⪼🥀𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝 𝐁𝐚𝐛𝐲🎉\n║\n║┣⪼ {self.name}\n║\n║┣⪼🎈𝐈𝐃:- `{self.id}` \n║\n║┣⪼🎄@{self.username} \n║ \n║┣⪼💖𝐓𝐡𝐚𝐧𝐤𝐬 𝐅𝐨𝐫 𝐔𝐬𝐢𝐧𝐠😍\n║\n╚════════════════❍⊱❁",
                     reply_markup=button,
                 )
-            except PeerIdInvalid: # <--- Handles your invalid ID error
-                LOGGER(__name__).error(f"Error: LOG_GROUP_ID ({config.LOG_GROUP_ID}) is invalid. Bot might not be in that group.")
+            except PeerIdInvalid:
+                LOGGER(__name__).error(f"❌ Error: LOG_GROUP_ID ({config.LOG_GROUP_ID}) invalid. Bot ko group mein add karke admin banayein!")
             except ChatWriteForbidden:
-                LOGGER(__name__).error(f"Bot cannot write to the log group. Make sure Bot is Admin.")
-                try:
-                    await self.send_message(
-                        config.LOG_GROUP_ID,
-                        f"╔═══❰𝐖𝐄𝐋𝐂𝐎𝐌𝐄❱═══❍⊱❁۪۪\n║\n║┣⪼🥀𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝 𝐁𝐚𝐛𝐲🎉\n║\n║◈ {self.name}\n║\n║┣⪼🎈𝐈𝐃:- `{self.id}` \n║\n║┣⪼🎄@{self.username} \n║ \n║┣⪼💖𝐓𝐡𝐚𝐧𝐤𝐬 𝐅𝐨𝐫 𝐔𝐬𝐢𝐧𝐠😍\n║\n╚══════════════❍⊱❁",
-                        reply_markup=button,
-                    )
-                except Exception as e:
-                    LOGGER(__name__).error(f"Failed to send message in log group: {e}")
+                LOGGER(__name__).error(f"❌ Error: Bot log group mein message nahi bhej sakta. Admin banayein!")
             except Exception as e:
-                LOGGER(__name__).error(f"Unexpected error while sending to log group: {e}")
+                LOGGER(__name__).error(f"❌ Unexpected error in Log Group: {e}")
         else:
-            LOGGER(__name__).warning("LOG_GROUP_ID is not set.")
+            LOGGER(__name__).warning("LOG_GROUP_ID set nahi hai.")
 
         # Commands setup
         if config.SET_CMDS:
@@ -144,14 +139,6 @@ class VIPBot(Client):
                 )
             except Exception as e:
                 LOGGER(__name__).error(f"Failed to set bot commands: {e}")
-
-        if config.LOG_GROUP_ID:
-            try:
-                chat_member_info = await self.get_chat_member(config.LOG_GROUP_ID, self.id)
-                if chat_member_info.status != ChatMemberStatus.ADMINISTRATOR:
-                    LOGGER(__name__).error("Please promote Bot as Admin in Logger Group")
-            except Exception as e:
-                LOGGER(__name__).error(f"Error checking bot status: {e}")
 
         LOGGER(__name__).info(f"MusicBot Started as {self.name}")
 
