@@ -1,18 +1,8 @@
-#
-# Copyright (C) 2024 by THE-VIP-BOY-OP@Github, < https://github.com/THE-VIP-BOY-OP >.
-#
-# This file is part of < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC > project,
-# and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE >
-#
-# All rights reserved.
-#
-
 import pyrogram
 from pyrogram import Client
-from pyrogram.errors import PeerIdInvalid, ChatWriteForbidden
+from pyrogram.errors import PeerIdInvalid, ChatWriteForbidden, FloodWait
 from typing import Callable, Optional
-
+import asyncio
 import config
 from ..logging import LOGGER
 
@@ -22,41 +12,14 @@ clients = []
 
 class Userbot(Client):
     def __init__(self):
-        self.one = Client(
-            "VIPString1",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            session_string=str(config.STRING1),
-        )
-        self.two = Client(
-            "VIPString2",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            session_string=str(config.STRING2),
-        )
-        self.three = Client(
-            "VIPString3",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            session_string=str(config.STRING3),
-        )
-        self.four = Client(
-            "VIPString4",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            session_string=str(config.STRING4),
-        )
-        self.five = Client(
-            "VIPString5",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            session_string=str(config.STRING5),
-        )
+        self.one = Client("VIPString1", api_id=config.API_ID, api_hash=config.API_HASH, session_string=str(config.STRING1))
+        self.two = Client("VIPString2", api_id=config.API_ID, api_hash=config.API_HASH, session_string=str(config.STRING2))
+        self.three = Client("VIPString3", api_id=config.API_ID, api_hash=config.API_HASH, session_string=str(config.STRING3))
+        self.four = Client("VIPString4", api_id=config.API_ID, api_hash=config.API_HASH, session_string=str(config.STRING4))
+        self.five = Client("VIPString5", api_id=config.API_ID, api_hash=config.API_HASH, session_string=str(config.STRING5))
 
     async def start(self):
         LOGGER(__name__).info(f"Starting Assistant Clients...")
-        
-        # सभी असिस्टेंट्स को एक लिस्ट में डाल दिया ताकि लूप चला सकें
         assistant_list = [
             (config.STRING1, self.one, 1),
             (config.STRING2, self.two, 2),
@@ -81,16 +44,19 @@ class Userbot(Client):
                 assistants.append(num)
                 clients.append(client)
 
-                # Logger ID पर मैसेज भेजना (Error Handling के साथ)
+                # --- मैसेज भेजने का सुधारा हुआ तरीका ---
                 if config.LOG_GROUP_ID:
                     try:
-                        await client.send_message(config.LOG_GROUP_ID, f"**Assistant {num} Started Successfully!**")
+                        # पहले ग्रुप को 'Resolve' करना जरूरी है
+                        await client.get_chat(config.LOG_GROUP_ID)
+                        await client.send_message(config.LOG_GROUP_ID, f"✅ **Assistant {num} Started!**")
                     except (PeerIdInvalid, ChatWriteForbidden):
-                        LOGGER(__name__).warning(f"Assistant {num} cannot send message to Log Group. ID might be invalid or Assistant is not Admin.")
+                        LOGGER(__name__).error(f"❌ Assistant {num} failed: Add Assistant to Log Group and make it Admin!")
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
                     except Exception as e:
-                        LOGGER(__name__).error(f"Assistant {num} Log Error: {e}")
+                        LOGGER(__name__).error(f"Assistant {num} Error: {e}")
 
-                # डेटा सेट करना
                 get_me = await client.get_me()
                 client.username = get_me.username
                 client.id = get_me.id
@@ -102,14 +68,10 @@ class Userbot(Client):
 
     async def stop(self):
         for client in clients:
-            try:
-                await client.stop()
-            except Exception:
-                pass
+            try: await client.stop()
+            except: pass
 
-def on_cmd(
-    filters: Optional[pyrogram.filters.Filter] = None, group: int = 0
-) -> Callable:
+def on_cmd(filters: Optional[pyrogram.filters.Filter] = None, group: int = 0) -> Callable:
     def decorator(func: Callable) -> Callable:
         for client in clients:
             client.add_handler(pyrogram.handlers.MessageHandler(func, filters), group)
