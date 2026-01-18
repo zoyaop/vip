@@ -1,4 +1,5 @@
-
+Abg==2.3.1
+deep-translator
 pyromod
 openai
 aiofiles
@@ -10,10 +11,9 @@ ffmpeg-python
 gitpython
 hachoir
 heroku3
-#httpx[http2]
-httpx==0.28.1
+httpx[http2]
 lyricsgenius
-motor
+motor==2.5.0
 wget
 pillow==9.5.0
 pymongo==3.12.0
@@ -34,5 +34,4 @@ urllib3
 uvloop
 flask
 gunicorn==20.1.0
-deep_translator
-yt_dlp
+yt-dlp
