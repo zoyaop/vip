@@ -160,7 +160,7 @@ This project is licensed under the **MIT License**
 
 A heartfelt thanks to **Team Yukki** ❤️
 
-* GitHub: [https://github.com/TeamYukki](https://github.com/TeamYukki)
+* GitHub: [**https://github.com/TeamYukki**](https://github.com/TeamYukki)
 * Project: YukkiMusicBot
 
 This project is inspired by YukkiMusicBot and customized with additional features, optimizations, and Google Cloud YouTube API integration.
