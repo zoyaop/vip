@@ -138,30 +138,30 @@ YOUTUBE_API_KEY=your_google_cloud_youtube_api_key
 
 ## 🤝 Support & Community
 
-* 🔔 Updates Channel: [https://t.me/VIP_CREATORS](https://t.me/VIP_CREATORS)
-* 🆘 Support Group: [https://t.me/TG_FRIENDSS](https://t.me/TG_FRIENDSS)
+* 🔔 [**Updates Channel**](https://t.me/VIP_CREATORS)
+* 🆘 [**Support Group**](https://t.me/TG_FRIENDSS)
 
 ---
 
 ## 📃 License
 
 This project is licensed under the **MIT License**
-[https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE](https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE)
+[https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE](https://github.com/lll-DEADLY-VENOM-lll/VIP-MUSIC/edit/Test/README.md)
 
 ---
 
 ## 🙋‍♂️ Credits
 
-* 👑 **THE VIP BOY** – Project Owner & Developer
+* 👑 ** KIRU ** – Project Owner & Developer
 
 ---
 
 ## 🙏 Special Thanks
 
-A heartfelt thanks to **Team Yukki** ❤️
+A heartfelt thanks to **VIP MUSIC** ❤️
 
 * GitHub: [**https://github.com/TeamYukki**](https://github.com/TeamYukki)
-* Project: YukkiMusicBot
+* Project: VIP-MI
 
 This project is inspired by YukkiMusicBot and customized with additional features, optimizations, and Google Cloud YouTube API integration.
 
