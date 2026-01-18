@@ -87,8 +87,7 @@ bash start
 * `HEROKU_API_KEY` – Heroku API key
 * `HEROKU_APP_NAME` – Heroku app name
 
-📘 Full variable list:
-[https://github.com/lll-DEADLY-VENOM-lll/VIP-MUSIC/edit/Test/README.md](https://github.com/lll-DEADLY-VENOM-lll/VIP-MUSIC/edit/Test/README.md)
+📘 [**Full variable list**](https://github.com/lll-DEADLY-VENOM-lll/VIP-MUSIC/edit/Test/README.md)
 
 ---
 
@@ -107,8 +106,7 @@ To ensure **stable and official YouTube search & metadata fetching**, this bot s
 
 ### 🛠 How to Get YouTube API Key (Step‑by‑Step)
 
-1. Go to **Google Cloud Console**
-   👉 [https://console.cloud.google.com/](https://console.cloud.google.com/)
+1. Go to [**Google Cloud Console**](https://console.cloud.google.com/)
 
 2. Create a **New Project**
 
@@ -138,15 +136,14 @@ YOUTUBE_API_KEY=your_google_cloud_youtube_api_key
 
 ## 🤝 Support & Community
 
-* 🔔 [**Updates Channel**](https://t.me/VIP_CREATORS)
-* 🆘 [**Support Group**](https://t.me/TG_FRIENDSS)
+* 🔔 [**Updates Channel**](https://t.me/about_deadly_venom)
+* 🆘 [**Support Group**](https://t.me/TNOBITA_SUPPORT)
 
 ---
 
 ## 📃 License
 
-This project is licensed under the **MIT License**
-[https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE](https://github.com/lll-DEADLY-VENOM-lll/VIP-MUSIC/edit/Test/README.md)
+This project is licensed under the [**MIT License**](https://github.com/lll-DEADLY-VENOM-lll/VIP-MUSIC/edit/Test/README.md)
 
 ---
 
@@ -160,8 +157,8 @@ This project is licensed under the **MIT License**
 
 A heartfelt thanks to **VIP MUSIC** ❤️
 
-* GitHub: [**https://github.com/TeamYukki**](https://github.com/TeamYukki)
-* Project: VIP-MI
+* [**GitHub**]()
+* [**Project**]()
 
 This project is inspired by YukkiMusicBot and customized with additional features, optimizations, and Google Cloud YouTube API integration.
 
