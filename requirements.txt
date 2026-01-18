@@ -1,8 +1,7 @@
-Abg==2.3.1
-deep-translator
+
 pyromod
 openai
-aiofiles==24.1.0
+aiofiles
 aiohttp
 asyncio
 beautifulsoup4
@@ -11,9 +10,10 @@ ffmpeg-python
 gitpython
 hachoir
 heroku3
+#httpx[http2]
 httpx==0.28.1
 lyricsgenius
-motor==2.5.0
+motor
 wget
 pillow==9.5.0
 pymongo==3.12.0
@@ -34,8 +34,3 @@ urllib3
 uvloop
 flask
 gunicorn==20.1.0
-yt-dlp
-safoneAPI
-lxml==4.9.4 
-oauth2client
-pillow==12.1.0
