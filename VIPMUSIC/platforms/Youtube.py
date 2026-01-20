@@ -13,7 +13,7 @@ from googleapiclient.errors import HttpError
 import config 
 from VIPMUSIC.utils.formatters import time_to_seconds
 
-# --- API ROTATION ---
+# --- SMART API ROTATION ---
 API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
 API_INDEX = 0 
 
@@ -50,6 +50,22 @@ class YouTubeAPI:
         duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
         return duration_str, total_seconds
 
+    # --- YE WALA FUNCTION MISSING THA ---
+    async def url(self, message_1: Message) -> Union[str, None]:
+        messages = [message_1]
+        if message_1.reply_to_message: messages.append(message_1.reply_to_message)
+        for message in messages:
+            if message.entities:
+                for entity in message.entities:
+                    if entity.type == MessageEntityType.URL:
+                        text = message.text or message.caption
+                        return text[entity.offset : entity.offset + entity.length]
+        return None
+
+    async def exists(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        return bool(re.search(self.regex, link))
+
     async def details(self, link: str, videoid: Union[bool, str] = None):
         global API_INDEX
         if videoid: vidid = link
@@ -74,18 +90,18 @@ class YouTubeAPI:
                 video_data = video_response["items"][0]
                 title, d_min, d_sec = video_data["snippet"]["title"], *self.parse_duration(video_data["contentDetails"]["duration"])
                 return title, d_min, d_sec, video_data["snippet"]["thumbnails"]["high"]["url"], vidid
+            
             except HttpError as e:
                 if e.resp.status in [403, 429]:
                     API_INDEX = (API_INDEX + 1) % len(API_KEYS)
                     continue 
                 return None
-            except Exception: return None
+            except Exception:
+                return None
         return None
 
-    # --- BLOCK BYPASS LOGIC START ---
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
-        # Bypass options: Android client aur user-agent use kiya hai
         opts = [
             "yt-dlp", "-g", "-f", "best[height<=?480][ext=mp4]/best",
             "--no-playlist", "--geo-bypass",
@@ -101,7 +117,6 @@ class YouTubeAPI:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         
-        # Sabse important bypass options yahan hain
         common_opts = {
             "geo_bypass": True,
             "nocheckcertificate": True,
@@ -136,10 +151,8 @@ class YouTubeAPI:
 
             downloaded_file = await loop.run_in_executor(None, audio_dl)
             return downloaded_file, True
-        except Exception as e:
-            print(f"Download Error: {e}")
+        except Exception:
             return None, False
-    # --- BLOCK BYPASS LOGIC END ---
 
     async def title(self, link: str, videoid: Union[bool, str] = None):
         res = await self.details(link, videoid)
@@ -163,3 +176,25 @@ class YouTubeAPI:
         if videoid: link = self.listbase + link
         playlist = await shell_cmd(f"yt-dlp --extractor-args \"youtube:player-client=android,web\" -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}")
         return [k for k in playlist.split("\n") if k != ""]
+
+    async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
+        global API_INDEX
+        for _ in range(len(API_KEYS)):
+            youtube = get_youtube_client()
+            try:
+                search_response = await asyncio.to_thread(
+                    youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute
+                )
+                if not search_response.get("items"): return None
+                result = search_response["items"][query_type]
+                vidid, title, thumb = result["id"]["videoId"], result["snippet"]["title"], result["snippet"]["thumbnails"]["high"]["url"]
+                
+                video_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
+                d_min, _ = self.parse_duration(video_res["items"][0]["contentDetails"]["duration"])
+                return title, d_min, thumb, vidid
+            except HttpError as e:
+                if e.resp.status in [403, 429]:
+                    API_INDEX = (API_INDEX + 1) % len(API_KEYS)
+                    continue
+                return None
+        return None
