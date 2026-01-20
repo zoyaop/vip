@@ -50,7 +50,6 @@ class YouTubeAPI:
         duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
         return duration_str, total_seconds
 
-    # --- YE WALA FUNCTION MISSING THA ---
     async def url(self, message_1: Message) -> Union[str, None]:
         messages = [message_1]
         if message_1.reply_to_message: messages.append(message_1.reply_to_message)
@@ -88,8 +87,11 @@ class YouTubeAPI:
                 )
                 if not video_response.get("items"): return None
                 video_data = video_response["items"][0]
-                title, d_min, d_sec = video_data["snippet"]["title"], *self.parse_duration(video_data["contentDetails"]["duration"])
-                return title, d_min, d_sec, video_data["snippet"]["thumbnails"]["high"]["url"], vidid
+                title = video_data["snippet"]["title"]
+                duration_res = self.parse_duration(video_data["contentDetails"]["duration"])
+                d_min, d_sec = duration_res # Yahan TypeError aa raha tha, ab fix hai
+                thumb = video_data["snippet"]["thumbnails"]["high"]["url"]
+                return title, d_min, d_sec, thumb, vidid
             
             except HttpError as e:
                 if e.resp.status in [403, 429]:
@@ -106,7 +108,6 @@ class YouTubeAPI:
             "yt-dlp", "-g", "-f", "best[height<=?480][ext=mp4]/best",
             "--no-playlist", "--geo-bypass",
             "--extractor-args", "youtube:player-client=android,web;skip=dash,hls",
-            "--user-agent", "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0",
             f"{link}"
         ]
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
@@ -116,19 +117,9 @@ class YouTubeAPI:
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
-        
         common_opts = {
-            "geo_bypass": True,
-            "nocheckcertificate": True,
-            "quiet": True,
-            "no_warnings": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web"],
-                    "skip": ["dash", "hls"]
-                }
-            },
-            "user_agent": "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"
+            "geo_bypass": True, "nocheckcertificate": True, "quiet": True, "no_warnings": True,
+            "extractor_args": {"youtube": {"player_client": ["android", "web"]}}
         }
 
         def audio_dl():
@@ -143,11 +134,11 @@ class YouTubeAPI:
             if songvideo:
                 fpath = f"downloads/{title}.mp4"
                 await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL({**common_opts, "format": f"{format_id}+140", "outtmpl": f"downloads/{title}", "merge_output_format": "mp4"}).download([link]))
-                return fpath
+                return fpath, True
             elif songaudio:
                 fpath = f"downloads/{title}.mp3"
                 await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL({**common_opts, "format": format_id, "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]}).download([link]))
-                return fpath
+                return fpath, True
 
             downloaded_file = await loop.run_in_executor(None, audio_dl)
             return downloaded_file, True
@@ -187,7 +178,9 @@ class YouTubeAPI:
                 )
                 if not search_response.get("items"): return None
                 result = search_response["items"][query_type]
-                vidid, title, thumb = result["id"]["videoId"], result["snippet"]["title"], result["snippet"]["thumbnails"]["high"]["url"]
+                vidid = result["id"]["videoId"]
+                title = result["snippet"]["title"]
+                thumb = result["snippet"]["thumbnails"]["high"]["url"]
                 
                 video_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
                 d_min, _ = self.parse_duration(video_res["items"][0]["contentDetails"]["duration"])
