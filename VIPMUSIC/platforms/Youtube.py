@@ -1,6 +1,3 @@
-# Copyright (C) 2024 by THE-VIP-BOY-OP@Github, <https://github.com/THE-VIP-BOY-OP>.
-# This file is part of <https://github.com/THE-VIP-BOY-OP/VIP-MUSIC> project.
-
 import asyncio
 import os
 import re
