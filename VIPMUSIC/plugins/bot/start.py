@@ -7,11 +7,13 @@
 #
 # All rights reserved.
 #
+
 import asyncio
 import time
+import random # इफेक्ट्स के लिए ज़रूरी
 
 from pyrogram import filters
-from pyrogram.enums import ChatType, ParseMode
+from pyrogram.enums import ChatType, ParseMode, ChatAction
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from youtubesearchpython.__future__ import VideosSearch
 from pyrogram.errors import RPCError
@@ -43,6 +45,13 @@ from .help import paginate_modules
 
 loop = asyncio.get_running_loop()
 
+# स्वागत के लिए कुछ बेहतरीन स्टिकर्स की लिस्ट
+WELCOME_STICKERS = [
+    "CAACAgUAAxkBAAEC_ZpmE_7X_hW9S5S7-H6m5K1mAAH1AAI9BAAC686pVR6i0S5_S0HeHgQ",
+    "CAACAgIAAxkBAAEC_ZxmE_8_8Y4Z8ZzS5S7-H6m5K1mAAH1AAI9BAAC686pVR6i0S5_S0HeHgQ",
+    "CAACAgEAAxkBAAEC_Z5mE_9S5S7-H6m5K1mAAH1AAI9BAAC686pVR6i0S5_S0HeHgQ",
+    "CAACAgUAAxkBAAELunRmK8-A-mY-H0u7S7-H6m5K1mAAH1AAI9BAAC686pVR6i0S5_S0HeHgQ"
+]
 
 @app.on_message(group=-1)
 async def ban_new(client, message):
@@ -65,7 +74,17 @@ async def ban_new(client, message):
 async def start_comm(client, message: Message, _):
     chat_id = message.chat.id
     await add_served_user(message.from_user.id)
-    await message.react("🕊️")
+    
+    # --- EFFECT: Random Reaction ---
+    emojis = ["🕊️", "✨", "🔥", "⚡", "❤️", "💎"]
+    try:
+        await message.react(random.choice(emojis))
+    except:
+        pass
+
+    # --- EFFECT: Typing Action ---
+    await client.send_chat_action(chat_id, ChatAction.TYPING)
+
     if len(message.text.split()) > 1:
         name = message.text.split(None, 1)[1]
         if name[0:4] == "help":
@@ -231,6 +250,12 @@ async def start_comm(client, message: Message, _):
                 except Exception:
                     pass
     else:
+        # --- EFFECT: Random Welcome Sticker ---
+        try:
+            await message.reply_sticker(random.choice(WELCOME_STICKERS))
+        except:
+            pass
+            
         out = private_panel(_)
         await message.reply_photo(
             photo=config.START_IMG_URL,
@@ -252,6 +277,12 @@ async def start_comm(client, message: Message, _):
 @app.on_message(filters.command(["start"]) & filters.group & ~BANNED_USERS)
 @LanguageStart
 async def testbot(client, message: Message, _):
+    # --- EFFECT: Group Start Reaction ---
+    try:
+        await message.react("🚀")
+    except:
+        pass
+        
     out = alive_panel(_)
     uptime = int(time.time() - _boot_)
     chat_id = message.chat.id
