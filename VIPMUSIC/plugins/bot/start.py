@@ -45,8 +45,8 @@ from .help import paginate_modules
 
 loop = asyncio.get_running_loop()
 
-# खुशी वाले इमोजी की लिस्ट
-HAPPY_EMOJIS = ["🥰", "🥳", "😇", "😍", "✨", "❤️", "🤩", "💖", "🥂"]
+# बैक-टू-बैक रिएक्शन के लिए इमोजी की लिस्ट
+REACTION_SERIES = ["❤️", "✨", "🔥", "⚡", "🥳", "🌈", "🍓", "💎"]
 
 @app.on_message(group=-1)
 async def ban_new(client, message):
@@ -67,9 +67,12 @@ async def start_comm(client, message: Message, _):
     chat_id = message.chat.id
     await add_served_user(message.from_user.id)
     
-    # --- EFFECT: Happy Emoji Reaction (जब कोई स्टार्ट करेगा) ---
+    # --- EFFECT: Back to Back Sequential Reactions ---
+    # बोट एक के बाद एक इमोजी बदलेगा (Animation effect)
     try:
-        await message.react(random.choice(HAPPY_EMOJIS))
+        for emoji in REACTION_SERIES:
+            await message.react(emoji)
+            await asyncio.sleep(0.1) # हल्का सा गैप ताकि एनीमेशन दिखे
     except:
         pass
 
@@ -96,11 +99,11 @@ async def start_comm(client, message: Message, _):
             return
 
         if name[0:3] == "inf":
-            m = await message.reply_text("🔎 ғᴇᴛᴄʜɪɴɢ ɪɴғᴏ!")
+            m = await message.reply_text("🔎")
             query = f"https://www.youtube.com/watch?v={(str(name)).replace('info_', '', 1)}"
             results = VideosSearch(query, limit=1)
             res = (await results.next())["result"][0]
-            searched_text = f"🔍 **ᴠɪᴅᴇᴏ ᴛʀᴀᴄᴋ ɪɴғᴏ**\n\n❇️ **ᴛɪᴛʟᴇ:** {res['title']}\n⏳ **ᴅᴜʀᴀᴛɪᴏɴ:** {res['duration']} Mins\n👀 **ᴠɪᴇᴡs:** `{res['viewCount']['short']}`\n🎥 **ᴄʜᴀɴɴᴇʟ:** {res['channel']['name']}"
+            searched_text = f"🔍 **ᴠɪᴅᴇᴏ ᴛʀᴀᴄᴋ ɪɴғᴏ**\n\n❇️ **ᴛɪᴛʟᴇ:** {res['title']}\n⏳ **ᴅᴜʀᴀᴛɪᴏɴ:** {res['duration']} Mins\n🎥 **ᴄʜᴀɴɴᴇʟ:** {res['channel']['name']}"
             await m.delete()
             return await app.send_photo(
                 chat_id, 
@@ -110,7 +113,6 @@ async def start_comm(client, message: Message, _):
             )
 
     else:
-        # यहाँ एरर वाली लाइन को पूरी तरह ठीक कर दिया गया है
         out = private_panel(_)
         await message.reply_photo(
             photo=config.START_IMG_URL,
@@ -130,9 +132,11 @@ async def start_comm(client, message: Message, _):
 @app.on_message(filters.command(["start"]) & filters.group & ~BANNED_USERS)
 @LanguageStart
 async def testbot(client, message: Message, _):
-    # ग्रुप में भी खुशी वाला इमोजी रिएक्शन
+    # ग्रुप में बैक-टू-बैक रिएक्शन
     try:
-        await message.react("🥳")
+        for emoji in ["🚀", "✨", "🔥"]:
+            await message.react(emoji)
+            await asyncio.sleep(0.1)
     except:
         pass
         
@@ -151,7 +155,7 @@ async def welcome(client, message: Message):
     chat_id = message.chat.id
     if config.PRIVATE_BOT_MODE == str(True):
         if not await is_served_private_chat(chat_id):
-            await message.reply_text("ᴛʜɪs ʙᴏᴛ ɪs ɪɴ ᴘʀɪᴠᴀᴛᴇ ᴍᴏᴅᴇ. ᴄᴏɴᴛᴀᴄᴛ ᴏᴡɴᴇʀ.")
+            await message.reply_text("ᴛʜɪs ʙᴏᴛ ɪs ɪɴ ᴘʀɪᴠᴀᴛᴇ ᴍᴏᴅᴇ.")
             return await app.leave_chat(chat_id)
     
     await add_served_chat(chat_id)
