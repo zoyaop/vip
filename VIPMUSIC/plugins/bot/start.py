@@ -45,11 +45,12 @@ from .help import paginate_modules
 
 loop = asyncio.get_running_loop()
 
-# स्वागत के लिए बेहतरीन स्टिकर्स की लिस्ट (File IDs)
-WELCOME_STICKERS = [
-    "CAACAgUAAxkBAAEL7_xl-9vS_q_y_q_y_q_y_q_y", 
-    "CAACAgIAAxkBAAENInxmY_V60A-fW_K_K_K_K_K",
-    "CAACAgQAAxkBAAENIn5mY_V8fS_S_S_S_S_S_S",
+# एनिमेटेड मैसेज इफेक्ट्स (Telegram Premium Effects)
+EFFECT_ID = [
+    5046509860389126442,
+    5107584321108051014,
+    5104841245755180586,
+    5159385139981059251,
 ]
 
 @app.on_message(group=-1)
@@ -60,7 +61,7 @@ async def ban_new(client, message):
     if await is_banned_user(user_id):
         try:
             await message.chat.ban_member(user_id)
-            await message.reply_text("😳 आप इस बोट से बैन हैं।")
+            await message.reply_text("😳 You are Banned from this Bot.")
         except:
             pass
 
@@ -71,10 +72,9 @@ async def start_comm(client, message: Message, _):
     chat_id = message.chat.id
     await add_served_user(message.from_user.id)
     
-    # --- EFFECT: Random Reaction ---
-    emojis = ["🕊️", "✨", "🔥", "⚡", "❤️", "💎", "🌟"]
+    # --- EFFECT: Random Emoji Reaction ---
     try:
-        await message.react(random.choice(emojis))
+        await message.react(random.choice(["🔥", "✨", "⚡", "❤️", "💎", "🌟"]))
     except:
         pass
 
@@ -92,58 +92,10 @@ async def start_comm(client, message: Message, _):
                 caption=_["help_1"],
                 reply_markup=keyboard,
             )
-        if name[0:4] == "song":
-            return await message.reply_text(_["song_2"])
-        if name == "mkdwn_help":
-            return await message.reply(MARKDOWN, parse_mode=ParseMode.HTML)
-        if name == "greetings":
-            return await message.reply(WELCOMEHELP, parse_mode=ParseMode.HTML)
-
-        if name[0:3] == "sta":
-            m = await message.reply_text("🔎 ғᴇᴛᴄʜɪɴɢ ʏᴏᴜʀ ᴘᴇʀsᴏɴᴀʟ sᴛᴀᴛs.!")
-            stats = await get_userss(message.from_user.id)
-            if not stats:
-                return await m.edit(_["ustats_1"])
-
-            def get_stats():
-                msg = ""
-                limit = 0
-                results = {str(i): stats[i]["spot"] for i in stats}
-                list_arranged = dict(sorted(results.items(), key=lambda item: item[1], reverse=True))
-                tota = sum(results.values())
-                videoid = None
-                for vidid, count in list_arranged.items():
-                    if limit == 10: break
-                    if limit == 0: videoid = vidid
-                    limit += 1
-                    details = stats.get(vidid)
-                    title = (details["title"][:35]).title()
-                    if vidid == "telegram":
-                        msg += f"🔗 [ᴛᴇʟᴇɢʀᴀᴍ]({config.SUPPORT_GROUP}) ** played {count} ᴛɪᴍᴇs**\n\n"
-                    else:
-                        msg += f"🔗 [{title}](https://www.youtube.com/watch?v={vidid}) ** played {count} times**\n\n"
-                return videoid, _["ustats_2"].format(len(stats), tota, limit) + msg
-
-            try:
-                videoid, msg = await loop.run_in_executor(None, get_stats)
-                thumbnail = await YouTube.thumbnail(videoid, True)
-                await m.delete()
-                await message.reply_photo(photo=thumbnail, caption=msg)
-            except:
-                await m.edit("Error fetching stats.")
-            return
-
+            
         if name[0:3] == "sud":
             await sudoers_list(client=client, message=message, _=_)
             return
-
-        if name[0:3] == "lyr":
-            query = (str(name)).replace("lyrics_", "", 1)
-            lyrical = config.lyrical
-            lyrics = lyrical.get(query)
-            if lyrics:
-                return await Telegram.send_split_text(message, lyrics)
-            return await message.reply_text("Failed to get lyrics.")
 
         if name[0:3] == "inf":
             m = await message.reply_text("🔎 ғᴇᴛᴄʜɪɴɢ ɪɴғᴏ!")
@@ -152,34 +104,41 @@ async def start_comm(client, message: Message, _):
             res = (await results.next())["result"][0]
             searched_text = f"🔍 **ᴠɪᴅᴇᴏ ᴛʀᴀᴄᴋ ɪɴғᴏ**\n\n❇️ **ᴛɪᴛʟᴇ:** {res['title']}\n⏳ **ᴅᴜʀᴀᴛɪᴏɴ:** {res['duration']} Mins\n👀 **ᴠɪᴇᴡs:** `{res['viewCount']['short']}`\n🎥 **ᴄʜᴀɴɴᴇʟ:** {res['channel']['name']}"
             await m.delete()
-            return await app.send_photo(chat_id, photo=res["thumbnails"][0]["url"], caption=searched_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎥 ᴡᴀᴛᴄʜ", url=res['link']), InlineKeyboardButton("🔄 ᴄʟᴏsᴇ", callback_data="close")]]))
+            return await app.send_photo(
+                chat_id, 
+                photo=res["thumbnails"][0]["url"], 
+                caption=searched_text, 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎥 ᴡᴀᴛᴄʜ", url=res['link']), InlineKeyboardButton("🔄 ᴄʟᴏsᴇ", callback_data="close")]])
+            )
 
     else:
-        # --- EFFECT: Random Welcome Sticker ---
-        try:
-            await message.reply_sticker(random.choice(WELCOME_STICKERS))
-        except:
-            pass
-            
+        # --- EFFECT: Premium Message Effect (Confetti/Hearts) ---
         out = private_panel(_)
         await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=_["start_2"].format(message.from_user.mention, app.mention),
             reply_markup=InlineKeyboardMarkup(out),
+            message_effect_id=random.choice(EFFECT_ID) # Random Effect
         )
+        
         if await is_on_off(config.LOG):
             try:
-                await app.send_message(config.LOG_GROUP_ID, f"{message.from_user.mention} ʜᴀs sᴛᴀʀᴛᴇᴅ ʙᴏᴛ.")
+                await app.send_message(
+                    config.LOG_GROUP_ID, 
+                    f"{message.from_user.mention} ʜᴀs sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ."
+                )
             except: pass
 
 
 @app.on_message(filters.command(["start"]) & filters.group & ~BANNED_USERS)
 @LanguageStart
 async def testbot(client, message: Message, _):
+    # --- EFFECT: Group Reaction ---
     try:
         await message.react("🚀")
     except:
         pass
+        
     out = alive_panel(_)
     uptime = get_readable_time(int(time.time() - _boot_))
     await message.reply_photo(
@@ -195,7 +154,7 @@ async def welcome(client, message: Message):
     chat_id = message.chat.id
     if config.PRIVATE_BOT_MODE == str(True):
         if not await is_served_private_chat(chat_id):
-            await message.reply_text("ᴛʜɪs ʙᴏᴛ ɪs ɪɴ ᴘʀɪᴠᴀᴛᴇ ᴍᴏᴅᴇ.")
+            await message.reply_text("ᴛʜɪs ʙᴏᴛ ɪs ɪɴ ᴘʀɪᴠᴀᴛᴇ ᴍᴏᴅᴇ. ᴄᴏɴᴛᴀᴄᴛ ᴏᴡɴᴇʀ.")
             return await app.leave_chat(chat_id)
     
     await add_served_chat(chat_id)
@@ -209,7 +168,10 @@ async def welcome(client, message: Message):
                     return await app.leave_chat(chat_id)
                 
                 userbot = await get_assistant(chat_id)
-                await message.reply_text(_["start_2"].format(app.mention, userbot.username, userbot.id), reply_markup=InlineKeyboardMarkup(start_pannel(_)))
+                await message.reply_text(
+                    _["start_2"].format(app.mention, userbot.username, userbot.id), 
+                    reply_markup=InlineKeyboardMarkup(start_pannel(_))
+                )
             
             elif member.id in config.OWNER_ID:
                 await message.reply_text(_["start_3"].format(app.mention, member.mention))
@@ -221,9 +183,7 @@ async def welcome(client, message: Message):
 __MODULE__ = "Boᴛ"
 __HELP__ = """
 <b>★ /stats</b> - Get Global Stats.
-<b>★ /sudolist</b> - Check Sudo Users.
-<b>★ /lyrics</b> - Search Music Lyrics.
-<b>★ /song</b> - Download any Song.
-<b>★ /player</b> - Interactive Panel.
-<b>★ /queue</b> - Check Music Queue.
+<b>★ /lyrics</b> - Search Lyrics.
+<b>★ /song</b> - Download Music.
+<b>★ /sudolist</b> - Check Admins.
 """
