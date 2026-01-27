@@ -45,14 +45,6 @@ from .help import paginate_modules
 
 loop = asyncio.get_running_loop()
 
-# एनिमेटेड मैसेज इफेक्ट्स (Telegram Premium Effects)
-EFFECT_ID = [
-    5046509860389126442,
-    5107584321108051014,
-    5104841245755180586,
-    5159385139981059251,
-]
-
 @app.on_message(group=-1)
 async def ban_new(client, message):
     user_id = (
@@ -72,14 +64,17 @@ async def start_comm(client, message: Message, _):
     chat_id = message.chat.id
     await add_served_user(message.from_user.id)
     
-    # --- EFFECT: Random Emoji Reaction ---
+    # --- EFFECT: Emoji Reaction (Safe version) ---
     try:
         await message.react(random.choice(["🔥", "✨", "⚡", "❤️", "💎", "🌟"]))
     except:
         pass
 
     # --- EFFECT: Typing Action ---
-    await client.send_chat_action(chat_id, ChatAction.TYPING)
+    try:
+        await client.send_chat_action(chat_id, ChatAction.TYPING)
+    except:
+        pass
 
     if len(message.text.split()) > 1:
         name = message.text.split(None, 1)[1]
@@ -112,13 +107,12 @@ async def start_comm(client, message: Message, _):
             )
 
     else:
-        # --- EFFECT: Premium Message Effect (Confetti/Hearts) ---
+        # यहाँ से message_effect_id हटा दिया गया है ताकि TypeError न आए
         out = private_panel(_)
         await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=_["start_2"].format(message.from_user.mention, app.mention),
-            reply_markup=InlineKeyboardMarkup(out),
-            message_effect_id=random.choice(EFFECT_ID) # Random Effect
+            reply_markup=InlineKeyboardMarkup(out)
         )
         
         if await is_on_off(config.LOG):
@@ -133,7 +127,6 @@ async def start_comm(client, message: Message, _):
 @app.on_message(filters.command(["start"]) & filters.group & ~BANNED_USERS)
 @LanguageStart
 async def testbot(client, message: Message, _):
-    # --- EFFECT: Group Reaction ---
     try:
         await message.react("🚀")
     except:
