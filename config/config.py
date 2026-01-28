@@ -26,7 +26,7 @@ API_HASH = getenv("API_HASH")
 ## Get it from @Botfather in Telegram.
 BOT_TOKEN = getenv("BOT_TOKEN")
 
-MONGO_DB_URI = getenv("MONGO_DB_URI", None)
+MONGO_DB_URI = getenv("MONGO_DB_URI", "mongodb+srv://vishalpandeynkp:Bal6Y6FZeQeoAoqV@cluster0.dzgwt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 
 # -----------------------------------------------------------------
 # YOUTUBE API KEYS (MULTI-KEY SUPPORT)
@@ -80,7 +80,7 @@ LOG_GROUP_ID = getenv("LOG_GROUP_ID", "-1003034048678")
 
 # Your User ID.
 OWNER_ID = list(
-    map(int, getenv("OWNER_ID", "8520496440").split())
+    map(int, getenv("OWNER_ID", "8302503314").split())
 )  # Input type must be interger
 
 
