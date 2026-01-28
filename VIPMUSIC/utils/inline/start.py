@@ -3,7 +3,7 @@ import config
 from config import SUPPORT_GROUP, SUPPORT_CHANNEL
 from VIPMUSIC import app
 
-# --- UNIQUE START PANEL (Aesthetic Style) ---
+# --- 1. UNIQUE START PANEL (Group के लिए) ---
 def start_pannel(_):
     buttons = [
         [
@@ -24,7 +24,7 @@ def start_pannel(_):
     return buttons
 
 
-# --- UNIQUE PRIVATE PANEL (Premium VIP Look) ---
+# --- 2. UNIQUE PRIVATE PANEL (सारे बटन अलग-अलग बॉक्स में) ---
 def private_panel(_):
     buttons = [
         [
@@ -34,8 +34,10 @@ def private_panel(_):
             )
         ],
         [
-            InlineKeyboardButton(text="💠 ɢʀᴏᴜᴘ", url=config.SUPPORT_GROUP),
-            InlineKeyboardButton(text="🪐 ᴜᴘᴅᴀᴛᴇs", url=config.SUPPORT_CHANNEL),
+            InlineKeyboardButton(text="💠 ɢʀᴏᴜᴘ", url=config.SUPPORT_GROUP)
+        ],
+        [
+            InlineKeyboardButton(text="🪐 ᴜᴘᴅᴀᴛᴇs", url=config.SUPPORT_CHANNEL)
         ],
         [
             InlineKeyboardButton(
@@ -43,17 +45,19 @@ def private_panel(_):
             )
         ],
         [
-            InlineKeyboardButton(text="🍷 ᴏᴡɴᴇʀ", url=f"https://t.me/Your_Owner_ID"),
-            InlineKeyboardButton(text="🎋 sᴏᴜʀᴄᴇ", url=f"https://github.com/Your_Repo"),
+            InlineKeyboardButton(text="🍷 ᴏᴡɴᴇʀ", url=f"https://t.me/Your_Owner_ID") # अपनी ID डालें
         ],
         [
-            InlineKeyboardButton(text="👑 ᴠɪᴘ ɴᴇᴛᴡᴏʀᴋ 👑", url=f"https://t.me/Your_Main_Channel"),
+            InlineKeyboardButton(text="🎋 sᴏᴜʀᴄᴇ", url=f"https://github.com/Your_Repo") # अपनी लिंक डालें
+        ],
+        [
+            InlineKeyboardButton(text="👑 ᴠɪᴘ ɴᴇᴛᴡᴏʀᴋ 👑", url=f"https://t.me/Your_Main_Channel") # अपनी लिंक डालें
         ],
     ]
     return buttons
 
 
-# --- UNIQUE MUSIC START PANEL ---
+# --- 3. UNIQUE MUSIC START PANEL ---
 def music_start_panel(_):
     buttons = [
         [
@@ -67,7 +71,7 @@ def music_start_panel(_):
     return buttons
 
 
-# --- UNIQUE ALIVE PANEL (Minimalist & Clean) ---
+# --- 4. UNIQUE ALIVE PANEL ---
 def alive_panel(_):
     buttons = [
         [
