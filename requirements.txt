@@ -37,4 +37,4 @@ flask
 gunicorn==20.1.0
 yt-dlp
 https://github.com/KurimuzonAkuma/pyrogram/archive/v2.1.23.zip
-pip install git+https://github.com/lll-DEADLY-VENOM-lll/TheApi@main
+git+https://github.com/lll-DEADLY-VENOM-lll/TheApi@main
