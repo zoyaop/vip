@@ -11,7 +11,7 @@ from config import SUPPORT_GROUP, SUPPORT_CHANNEL, OWNER_ID
 from VIPMUSIC import app
 
 # ==========================================
-# 1. PRIVATE PANEL (DM - Box Style Layout)
+# 1. PRIVATE PANEL (DM - Help at the Bottom)
 # ==========================================
 def private_panel(_):
     buttons = [
@@ -28,16 +28,15 @@ def private_panel(_):
             InlineKeyboardButton(text="🪐 UPDATES", url=config.SUPPORT_CHANNEL),
         ],
         [
-            # Row 3: Help & Commands (Full Box)
-            # This triggers the "How to use" menu
+            # Row 3: Owner & Source (Side-by-Side Boxes)
+            InlineKeyboardButton(text="🍷 OWNER", url=f"tg://openmessage?user_id={config.OWNER_ID}"),
+            InlineKeyboardButton(text="🎋 SOURCE", url=config.UPSTREAM_REPO),
+        ],
+        [
+            # Row 4: Help & Commands (Moved to Bottom - Full Box)
             InlineKeyboardButton(
                 text="📜 HELP & COMMANDS 📜", callback_data="settings_back_helper"
             )
-        ],
-        [
-            # Row 4: Owner & Source (Side-by-Side Boxes)
-            InlineKeyboardButton(text="🍷 OWNER", url=f"tg://openmessage?user_id={config.OWNER_ID}"),
-            InlineKeyboardButton(text="🎋 SOURCE", url=config.UPSTREAM_REPO),
         ],
     ]
     return buttons
@@ -70,7 +69,7 @@ def start_pannel(_):
 
 
 # ==========================================
-# 3. ALIVE PANEL (Clean Branded Style)
+# 3. ALIVE PANEL (Clean Style)
 # ==========================================
 def alive_panel(_):
     buttons = [
