@@ -77,6 +77,8 @@ SONG_DOWNLOAD_DURATION = int(
 # You'll need a Private Group ID for this.
 LOG_GROUP_ID = getenv("LOG_GROUP_ID", "-1003034048678")
 
+# Your Username 
+OWNER_USERNAME = "KIRU_OP" # Bina @ ke likhein, jaise: 
 
 # Your User ID.
 OWNER_ID = list(
@@ -101,7 +103,7 @@ HEROKU_APP_NAME = getenv("HEROKU_APP_NAME")
 # For customized or modified Repository
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/THE-VIP-BOY-OP/VIP-MUSIC",
+    "https://github.com",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 
