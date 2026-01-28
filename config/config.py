@@ -58,7 +58,7 @@ EXTRA_PLUGINS = getenv(
 
 EXTRA_PLUGINS_REPO = getenv(
     "EXTRA_PLUGINS_REPO",
-    "https://github.com/lll-DEADLY-VENOM-lll/Extra-Plugin",
+    "https://github.com/VEM-252/Extra-Plugin",
 )
 # Fill here the external plugins repo where plugins that you want to load
 
