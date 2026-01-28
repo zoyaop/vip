@@ -7,7 +7,8 @@
 
 from pyrogram.types import InlineKeyboardButton
 import config
-from config import SUPPORT_GROUP, SUPPORT_CHANNEL, OWNER_ID
+# Yahan config se OWNER_USERNAME ko import kiya gaya hai
+from config import SUPPORT_GROUP, SUPPORT_CHANNEL, OWNER_ID, OWNER_USERNAME
 from VIPMUSIC import app
 
 # ==========================================
@@ -28,8 +29,8 @@ def private_panel(_):
             InlineKeyboardButton(text="🪐 UPDATES", url=config.SUPPORT_CHANNEL),
         ],
         [
-            # Row 3: Owner & Source (Side-by-Side Boxes)
-            InlineKeyboardButton(text="🍷 OWNER", url=f"tg://openmessage?user_id={config.OWNER_ID}"),
+            # Row 3: Owner & Source (Owner Username used here)
+            InlineKeyboardButton(text="🍷 OWNER", url=f"https://t.me/{config.OWNER_USERNAME}"),
             InlineKeyboardButton(text="🎋 SOURCE", url=config.UPSTREAM_REPO),
         ],
         [
@@ -79,12 +80,8 @@ def alive_panel(_):
             InlineKeyboardButton(text="❄️ SUPPORT ❄️", url=config.SUPPORT_GROUP),
         ],
         [
-            # Full Width Box
-            InlineKeyboardButton(text="ッ OWNER ッ", url=f"tg://openmessage?user_id={config.OWNER_ID}"),
+            # Full Width Box (Owner Username used here)
+            InlineKeyboardButton(text="ッ OWNER ッ", url=f"https://t.me/{config.OWNER_USERNAME}"),
         ]
     ]
     return buttons
-
-# ---------------------------------------------------------------------------------
-# ❤️ Powered by VIP MUSIC Team
-# ---------------------------------------------------------------------------------
