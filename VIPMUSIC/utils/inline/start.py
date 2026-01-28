@@ -2,13 +2,7 @@
 #                                 👑 VIP MUSIC 👑
 # ---------------------------------------------------------------------------------
 # Copyright (C) 2025 VIP MUSIC Team
-# Developer: Nand Yaduwanshi (NoxxOP)
-#
-# All rights reserved. 
-# This code is an intellectual property of VIP MUSIC.
-# Unauthorized copying, redistribution, or modification is strictly prohibited.
-#
-# Professional English Version - Premium Box Layout
+# English Version - Premium Brand Box Layout
 # ---------------------------------------------------------------------------------
 
 from pyrogram.types import InlineKeyboardButton
@@ -17,36 +11,33 @@ from config import SUPPORT_GROUP, SUPPORT_CHANNEL, OWNER_ID
 from VIPMUSIC import app
 
 # ==========================================
-# 1. PRIVATE PANEL (Premium Box Layout)
+# 1. PRIVATE PANEL (DM - Box Style Layout)
 # ==========================================
 def private_panel(_):
     buttons = [
         [
-            # Full Width Box
+            # Row 1: Invite (Full Box)
             InlineKeyboardButton(
                 text="✨ INVITE ME NOW ✨",
                 url=f"https://t.me/{app.username}?startgroup=true",
             )
         ],
         [
-            # Paired Boxes (Side-by-Side)
+            # Row 2: Group & Updates (Side-by-Side Boxes)
             InlineKeyboardButton(text="💠 GROUP", url=config.SUPPORT_GROUP),
             InlineKeyboardButton(text="🪐 UPDATES", url=config.SUPPORT_CHANNEL),
         ],
         [
-            # Full Width Box
+            # Row 3: Help & Commands (Full Box)
+            # This triggers the "How to use" menu
             InlineKeyboardButton(
-                text="📜 EXPLORE FEATURES 📜", callback_data="settings_back_helper"
+                text="📜 HELP & COMMANDS 📜", callback_data="settings_back_helper"
             )
         ],
         [
-            # Paired Boxes (Side-by-Side)
+            # Row 4: Owner & Source (Side-by-Side Boxes)
             InlineKeyboardButton(text="🍷 OWNER", url=f"tg://openmessage?user_id={config.OWNER_ID}"),
-            InlineKeyboardButton(text="🎋 SOURCE", url=f"https://github.com/VIP-MUSIC/VIP-MUSIC"),
-        ],
-        [
-            # Full Width Box
-            InlineKeyboardButton(text="👑 VIP NETWORK 👑", url=config.SUPPORT_CHANNEL),
+            InlineKeyboardButton(text="🎋 SOURCE", url=config.UPSTREAM_REPO),
         ],
     ]
     return buttons
@@ -58,7 +49,7 @@ def private_panel(_):
 def start_pannel(_):
     buttons = [
         [
-            # Full Width
+            # Full Width Box
             InlineKeyboardButton(
                 text="〆 ADD ME TO YOUR CHAT 〆",
                 url=f"https://t.me/{app.username}?startgroup=true",
@@ -79,7 +70,7 @@ def start_pannel(_):
 
 
 # ==========================================
-# 3. ALIVE PANEL (Clean Minimalist Style)
+# 3. ALIVE PANEL (Clean Branded Style)
 # ==========================================
 def alive_panel(_):
     buttons = [
@@ -92,24 +83,6 @@ def alive_panel(_):
             # Full Width Box
             InlineKeyboardButton(text="ッ OWNER ッ", url=f"tg://openmessage?user_id={config.OWNER_ID}"),
         ]
-    ]
-    return buttons
-
-
-# ==========================================
-# 4. MUSIC HELP PANEL
-# ==========================================
-def music_start_panel(_):
-    buttons = [
-        [
-            # Paired Boxes
-            InlineKeyboardButton(text="🚀 GET HELP 🚀", callback_data="settings_back_helper"),
-            InlineKeyboardButton(text="🛠 TOOLS", callback_data="settings_helper"),
-        ],
-        [
-            # Full Width Box
-            InlineKeyboardButton(text="✨ SUPPORT CHAT ✨", url=config.SUPPORT_GROUP),
-        ],
     ]
     return buttons
 
