@@ -54,7 +54,6 @@ class YouTubeAPI:
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
-        # Bypass ke liye User-Agent
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
     def parse_duration(self, duration):
@@ -85,7 +84,6 @@ class YouTubeAPI:
                         return entity.url
         return None
 
-    # Metadata ke liye API v3 ka hi use
     async def details(self, link: str, videoid: Union[bool, str] = None):
         if videoid: 
             vidid = link
@@ -120,14 +118,14 @@ class YouTubeAPI:
         title, d_min, d_sec, thumb, vidid = res
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
-    # Stream link nikalne ke liye optimized yt-dlp
+    # --- VIDEO PLAY OFF: SIRF AUDIO LINK FETCH KAREGA ---
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         cookie = get_cookie_file()
         
-        # FIX: Android client force karna "video data" error ke liye
+        # Format ko change karke sirf 'bestaudio' kar diya gaya hai
         opts = [
-            "yt-dlp", "-g", "-f", "best[height<=?720]", 
+            "yt-dlp", "-g", "-f", "bestaudio/best", 
             "--geo-bypass", 
             "--user-agent", self.user_agent,
             "--extractor-args", "youtube:player_client=android,web;skip=dash,hls",
@@ -143,7 +141,6 @@ class YouTubeAPI:
         if videoid: link = self.listbase + link
         cookie = get_cookie_file()
         cookie_arg = f"--cookies {cookie}" if cookie else ""
-        # Flat playlist ke liye yt-dlp sahi hai
         cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
         playlist = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, _ = await playlist.communicate()
@@ -167,13 +164,12 @@ class YouTubeAPI:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
 
-    # Download ke liye sabse zyada settings ki zaroorat hai
+    # --- DOWNLOAD: SIRF AUDIO (MP3) HI DOWNLOAD HOGA ---
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
         
-        # Bypassing YouTube Restrictions
         common_opts = {
             "quiet": True, 
             "no_warnings": True, 
@@ -195,12 +191,17 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
-        if songvideo:
-            opts = {**common_opts, "format": f"{format_id}+140/bestvideo+bestaudio", "outtmpl": f"downloads/{title}.%(ext)s", "merge_output_format": "mp4"}
-        elif songaudio:
-            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]}
-        else:
-            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"}
+        # Video option ko override karke hamesha audio download karega
+        opts = {
+            **common_opts, 
+            "format": "bestaudio/best", 
+            "outtmpl": f"downloads/{title}.%(ext)s", 
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio", 
+                "preferredcodec": "mp3", 
+                "preferredquality": "192"
+            }]
+        }
 
         try:
             downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
