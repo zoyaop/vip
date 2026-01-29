@@ -39,14 +39,11 @@ def switch_key():
 def get_cookie_file():
     try:
         folder = f"{os.getcwd()}/cookies"
-        if not os.path.exists(folder):
-            os.makedirs(folder)
         txt_files = glob.glob(os.path.join(folder, '*.txt'))
         if not txt_files:
             return None
         return random.choice(txt_files)
     except Exception as e:
-        logger.error(f"Cookie error: {e}")
         return None
 
 class YouTubeAPI:
@@ -77,10 +74,6 @@ class YouTubeAPI:
                 for ent in msg.entities:
                     if ent.type == MessageEntityType.URL:
                         return (msg.text or msg.caption)[ent.offset:ent.offset + ent.length]
-            if msg.caption_entities:
-                for ent in msg.caption_entities:
-                    if ent.type == MessageEntityType.TEXT_LINK:
-                        return ent.url
         return None
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
@@ -89,7 +82,6 @@ class YouTubeAPI:
         else:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
-
         while True:
             yt = get_youtube_client()
             if not yt: return None
@@ -98,10 +90,8 @@ class YouTubeAPI:
                     srch = await asyncio.to_thread(yt.search().list(q=link, part="id", maxResults=1, type="video").execute)
                     if not srch.get("items"): return None
                     vidid = srch["items"][0]["id"]["videoId"]
-
                 data = await asyncio.to_thread(yt.videos().list(part="snippet,contentDetails", id=vidid).execute)
                 if not data.get("items"): return None
-
                 item = data["items"][0]
                 title = item["snippet"]["title"]
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
@@ -118,29 +108,31 @@ class YouTubeAPI:
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> tuple:
-        if videoid: 
-            link = self.base + videoid
-        else:
-            # Link se ID nikalna zaroori hai unique filename ke liye
+        # Step 1: Unique Video ID nikalna
+        if not videoid:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
-            videoid = match.group(1) if match else str(random.randint(10000, 99999))
-
+            videoid = match.group(1) if match else "temp_" + str(random.randint(1000, 9999))
+        
+        link = self.base + videoid
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
-        
-        # Unique Filenames using videoid to prevent overwriting
-        save_path = f"downloads/{videoid}"
-        mp3_file = f"{save_path}.mp3"
-        
-        # Agar file pehle se downloaded hai to wahi return karo (Fast Queueing)
-        if os.path.exists(mp3_file):
-            return mp3_file, True
+
+        # Filenames ko unique banaya gaya hai (Using videoid)
+        # Isse do users ke songs aapas mein nahi takrayenge
+        temp_video_file = f"downloads/temp_{videoid}.mp4"
+        final_mp3 = f"downloads/{videoid}.mp3"
+
+        # Agar song pehle se download ho chuka hai, to direct return karo (Fast Queue)
+        if os.path.exists(final_mp3):
+            logger.info(f"Song already exists: {final_mp3}")
+            return final_mp3, True
 
         common_opts = {
             "quiet": True,
             "no_warnings": True,
             "geo_bypass": True,
             "nocheckcertificate": True,
+            "continuedl": True,
             "retries": 10,
             "extractor_args": {"youtube": {"player_client": ["android", "web", "ios"]}},
         }
@@ -152,25 +144,35 @@ class YouTubeAPI:
                 return ydl.prepare_filename(info)
 
         try:
-            # Optimized direct audio download (Faster & Stable)
-            audio_opts = {
+            # Step 1: Fast video download
+            video_opts = {
                 **common_opts,
-                "format": "bestaudio/best",
-                "outtmpl": save_path + ".%(ext)s",
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }],
+                "format": "22/best[ext=mp4][height<=720]/best",
+                "outtmpl": temp_video_file,
             }
-            
-            downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(audio_opts))
-            # yt-dlp might append .mp3 after post-processing
-            if not downloaded_file.endswith(".mp3"):
-                downloaded_file = mp3_file
-                
-            return downloaded_file, True
+            downloaded_temp = await loop.run_in_executor(None, lambda: ytdl_run(video_opts))
+
+            # Step 2: FFmpeg Convert (Purana fast logic)
+            ffmpeg_cmd = [
+                "ffmpeg", "-i", downloaded_temp,
+                "-vn", "-acodec", "libmp3lame", "-q:a", "2",
+                "-threads", "0", "-y", final_mp3
+            ]
+            proc = await asyncio.create_subprocess_exec(*ffmpeg_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await proc.communicate()
+
+            # Temp file delete karna zaroori hai
+            if os.path.exists(downloaded_temp):
+                os.remove(downloaded_temp)
+
+            return final_mp3, True
 
         except Exception as e:
             logger.error(f"Download Error: {e}")
-            return None, False
+            # Fallback direct audio download agar purana tarika fail ho
+            try:
+                opts = {**common_opts, "format": "bestaudio", "outtmpl": final_mp3, "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]}
+                res = await loop.run_in_executor(None, lambda: ytdl_run(opts))
+                return res, True
+            except:
+                return None, False
