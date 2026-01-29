@@ -13,8 +13,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 import config
-from AnonMusic import LOGGER
-from AnonMusic.utils.formatters import time_to_seconds
+from VIPMUSIC import LOGGER
+from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
