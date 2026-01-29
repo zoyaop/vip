@@ -17,7 +17,7 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
-# API keys rotation (unchanged)
+# API keys rotation
 API_KEYS = [k.strip() for k in config.API_KEY.split(",") if k.strip()]
 current_key_index = 0
 
@@ -175,15 +175,13 @@ class YouTubeAPI:
             "continuedl": True,
             "retries": 15,
             "fragment_retries": 10,
-            # Critical 403 fix (Jan 2026): Disable blocked android_sdkless client
+            # Fix for Jan 2026 403: disable blocked android_sdkless client
             "extractor_args": {
                 "youtube": {
                     "player_client": ["default", "ios", "web"],
                     "-android_sdkless": None,
                 }
             },
-            # Optional: Add this if you have Deno installed
-            # "verbose": True,  # Uncomment for debug logs
         }
 
         try:
@@ -203,32 +201,69 @@ class YouTubeAPI:
 
         downloaded_file = None
         success = False
+        temp_video_file = None
 
         try:
-            opts = {
+            # Step 1: Pahle video download (combined format – 403 kam aata hai)
+            video_opts = {
                 **common_opts,
-                "format": "bestaudio[ext=m4a]/bestaudio/best",
-                "outtmpl": f"downloads/{title}.%(ext)s",
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }],
-                "keepvideo": False,
+                "format": "best[ext=mp4][height<=720]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+                "outtmpl": f"downloads/{title}_temp.%(ext)s",
+                "merge_output_format": "mp4",
             }
 
-            downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-            success = True
-            logger.info(f"MP3 success: {downloaded_file}")
+            temp_video_file = await loop.run_in_executor(None, lambda: ytdl_run(video_opts))
+            logger.info(f"Temp video downloaded: {temp_video_file}")
+
+            # Step 2: Video se audio extract karo (MP3 convert)
+            mp3_file = f"downloads/{title}.mp3"
+
+            ffmpeg_cmd = [
+                "ffmpeg",
+                "-i", temp_video_file,
+                "-vn",                # video disable
+                "-acodec", "libmp3lame",
+                "-q:a", "2",          # quality ~192-256kbps (0 for best ~320kbps)
+                "-y", mp3_file
+            ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *ffmpeg_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode == 0:
+                downloaded_file = mp3_file
+                success = True
+                logger.info(f"Audio convert success: {mp3_file}")
+            else:
+                logger.error(f"FFmpeg fail: {stderr.decode().strip()}")
+
+            # Temp video delete
+            if temp_video_file and os.path.exists(temp_video_file):
+                os.remove(temp_video_file)
 
         except Exception as e:
-            logger.error(f"Main fail: {e}")
+            logger.error(f"Video download fail: {str(e)}")
+            # Fallback: Direct audio try (if video blocked)
             try:
-                opts["format"] = "140/251/bestaudio"  # Stable audio formats
+                opts = {
+                    **common_opts,
+                    "format": "140/251/bestaudio[ext=m4a]",
+                    "outtmpl": f"downloads/{title}.%(ext)s",
+                    "postprocessors": [{
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    }],
+                    "keepvideo": False,
+                }
                 downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
                 success = True
-                logger.info(f"Fallback success: {downloaded_file}")
+                logger.info(f"Fallback MP3 success: {downloaded_file}")
             except Exception as fb_e:
-                logger.error(f"Fallback fail: {fb_e}")
+                logger.error(f"Fallback fail: {str(fb_e)}")
 
         return downloaded_file, success
