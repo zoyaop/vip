@@ -4,23 +4,27 @@ import json
 import os
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Union
-
+import string
+import requests
 import yt_dlp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from googleapiclient.discovery import build 
 from googleapiclient.errors import HttpError
 
-from VIPMUSIC import LOGGER
-from VIPMUSIC.utils.formatters import time_to_seconds
-import config
+from AnonXMusic import LOGGER
+from AnonXMusic.utils.database import is_on_off
+from AnonXMusic.utils.formatters import time_to_seconds
+from config import YT_API_KEY, YTPROXY_URL as YTPROXY
 
 logger = LOGGER(__name__)
 
-# --- API ROTATION LOGIC ---
-# Config mein API_KEY ko comma se separate karke likhein (e.g. KEY1,KEY2)
-API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
+# --- GOOGLE API SEQUENTIAL ROTATION ---
+API_KEYS = [k.strip() for k in YT_API_KEY.split(",")]
 current_key_index = 0
 
 def get_youtube_client():
@@ -32,22 +36,41 @@ def get_youtube_client():
 def switch_key():
     global current_key_index
     current_key_index += 1
-    if current_key_index < len(API_KEYS):
-        logger.warning(f"YouTube Quota Finished. Switching to Key #{current_key_index + 1}")
-        return True
-    logger.error("All YouTube API Keys are exhausted!")
-    return False
+    return current_key_index < len(API_KEYS)
 
-# --- COOKIE LOGIC ---
+# --- COOKIE LOGIC (Same as your code) ---
 def cookie_txt_file():
     try:
         folder_path = f"{os.getcwd()}/cookies"
+        filename = f"{os.getcwd()}/cookies/logs.csv"
         txt_files = glob.glob(os.path.join(folder_path, '*.txt'))
         if not txt_files:
-            return None
-        return random.choice(txt_files)
-    except Exception:
+            raise FileNotFoundError("No .txt files found.")
+        cookie_txt_file = random.choice(txt_files)
+        with open(filename, 'a') as file:
+            file.write(f'Choosen File : {cookie_txt_file}\n')
+        return f"""cookies/{str(cookie_txt_file).split("/")[-1]}"""
+    except:
         return None
+
+# --- UTILS (Same as your code) ---
+async def check_file_size(link):
+    async def get_format_info(link):
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp", "--cookies", cookie_txt_file(), "-J", link,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        return json.loads(stdout.decode()) if stdout else None
+    
+    info = await get_format_info(link)
+    if not info: return None
+    return sum(f.get('filesize', 0) for f in info.get('formats', []))
+
+async def shell_cmd(cmd):
+    proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, _ = await proc.communicate()
+    return out.decode("utf-8")
 
 class YouTubeAPI:
     def __init__(self):
@@ -56,37 +79,32 @@ class YouTubeAPI:
         self.listbase = "https://youtube.com/playlist?list="
 
     def parse_duration(self, duration):
-        """ISO 8601 duration conversion (PT1M30S -> 90s)"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
-        hours = int(match.group(1) or 0)
-        minutes = int(match.group(2) or 0)
-        seconds = int(match.group(3) or 0)
-        total_seconds = hours * 3600 + minutes * 60 + seconds
-        duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
-        return duration_str, total_seconds
+        h, m, s = int(match.group(1) or 0), int(match.group(2) or 0), int(match.group(3) or 0)
+        total_sec = h * 3600 + m * 60 + s
+        dur_min = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+        return dur_min, total_sec
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         return bool(re.search(self.regex, link))
 
-    async def url(self, message: Message) -> Union[str, None]:
-        messages = [message]
-        if message.reply_to_message:
-            messages.append(message.reply_to_message)
-        for msg in messages:
-            if msg.entities:
-                for entity in msg.entities:
+    async def url(self, message_1: Message) -> Union[str, None]:
+        messages = [message_1]
+        if message_1.reply_to_message: messages.append(message_1.reply_to_message)
+        for message in messages:
+            if message.entities:
+                for entity in message.entities:
                     if entity.type == MessageEntityType.URL:
-                        return (msg.text or msg.caption)[entity.offset : entity.offset + entity.length]
-            if msg.caption_entities:
-                for entity in msg.caption_entities:
-                    if entity.type == MessageEntityType.TEXT_LINK:
-                        return entity.url
+                        return (message.text or message.caption)[entity.offset : entity.offset + entity.length]
+            if message.caption_entities:
+                for entity in message.caption_entities:
+                    if entity.type == MessageEntityType.TEXT_LINK: return entity.url
         return None
 
+    # --- GOOGLE API INTEGRATED DETAILS ---
     async def details(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: 
-            vidid = link
+        if videoid: vidid = link
         else:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
@@ -100,103 +118,77 @@ class YouTubeAPI:
                     if not search.get("items"): return None
                     vidid = search["items"][0]["id"]["videoId"]
                 
-                video_data = await asyncio.to_thread(youtube.videos().list(part="snippet,contentDetails", id=vidid).execute)
-                if not video_data.get("items"): return None
-                
-                item = video_data["items"][0]
+                v_data = await asyncio.to_thread(youtube.videos().list(part="snippet,contentDetails", id=vidid).execute)
+                item = v_data["items"][0]
                 title = item["snippet"]["title"]
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
-                return title, d_min, d_sec, thumb, vidid
-
+                duration_min, duration_sec = self.parse_duration(item["contentDetails"]["duration"])
+                return title, duration_min, duration_sec, thumb, vidid
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
+
+    # --- Aapka Video Logic (yt-dlp Subprocess) ---
+    async def video(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp", "--cookies", cookie_txt_file(), "-g", "-f", "bestaudio", link,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        return (1, stdout.decode().split("\n")[0]) if stdout else (0, stderr.decode())
+
+    # --- Aapka Playlist Logic ---
+    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
+        if videoid: link = self.listbase + link
+        playlist = await shell_cmd(f"yt-dlp -i --get-id --flat-playlist --cookies {cookie_txt_file()} --playlist-end {limit} --skip-download {link}")
+        return [k for k in playlist.split("\n") if k]
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
         res = await self.details(link, videoid)
         if not res: return None, None
-        title, d_min, d_sec, thumb, vidid = res
-        return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
+        title, dur_min, dur_sec, thumb, vidid = res
+        return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": dur_min, "thumb": thumb}, vidid
 
-    # --- STREAMING LOGIC (Audio Only Fix) ---
-    async def video(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: link = self.base + link
-        cookie = cookie_txt_file()
+    # --- Aapka Download Logic (YTPROXY + Requests) ---
+    async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
+        if videoid: vid_id = link
+        else:
+            match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
+            vid_id = match.group(1) if match else None
         
-        # Patched options to bypass 403 and force audio
-        opts = [
-            "yt-dlp", "-g", "-f", "bestaudio/best",
-            "--geo-bypass", "--nocheckcertificate",
-            "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            "--extractor-args", "youtube:player_client=ios,android,web",
-            link
-        ]
-        if cookie: opts.extend(["--cookies", cookie])
-        
-        proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await proc.communicate()
-        return (1, stdout.decode().split("\n")[0]) if stdout else (0, stderr.decode())
+        # --- Aapka Requests/Session Logic ---
+        def create_session():
+            session = requests.Session()
+            retries = Retry(total=3, backoff_factor=0.1)
+            session.mount('http://', HTTPAdapter(max_retries=retries))
+            session.mount('https://', HTTPAdapter(max_retries=retries))
+            return session
 
-    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
-        if videoid: link = self.listbase + link
-        cookie = cookie_txt_file()
-        cookie_arg = f"--cookies {cookie}" if cookie else ""
-        cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
-        playlist = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, _ = await playlist.communicate()
-        return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
-
-    async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
+        async def download_with_requests(url, filepath, headers=None):
             try:
-                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not search.get("items"): return None
-                
-                item = search["items"][query_type]
-                vidid = item["id"]["videoId"]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                
-                v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
-                return title, d_min, thumb, vidid
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
+                session = create_session()
+                response = session.get(url, headers=headers, stream=True, timeout=60)
+                response.raise_for_status()
+                with open(filepath, 'wb') as file:
+                    for chunk in response.iter_content(chunk_size=1024*1024):
+                        if chunk: file.write(chunk)
+                return filepath
+            except Exception as e:
+                logger.error(f"Download failed: {e}")
                 return None
 
-    # --- DOWNLOAD LOGIC (Direct yt-dlp, No Proxy) ---
-    async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
-        if videoid: link = self.base + link
-        loop = asyncio.get_running_loop()
-        cookie = cookie_txt_file()
+        # YTPROXY Call (As per your code)
+        headers = {"x-api-key": f"{API_KEYS[0]}", "User-Agent": "Mozilla/5.0"}
+        filepath = os.path.join("downloads", f"{vid_id}.mp3")
         
-        common_opts = {
-            "quiet": True, "no_warnings": True, "geo_bypass": True, "nocheckcertificate": True,
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "extractor_args": {'youtube': {'player_client': ['ios', 'android', 'web']}},
-            "http_chunk_size": 1048576,
-        }
-        if cookie: common_opts["cookiefile"] = cookie
-
-        def ytdl_run(opts):
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(link, download=True)
-                return ydl.prepare_filename(info)
-
-        # Hamesha audio hi download karega (Video off request par bhi)
-        opts = {
-            **common_opts, 
-            "format": "bestaudio/best", 
-            "outtmpl": f"downloads/{title}.%(ext)s", 
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio", 
-                "preferredcodec": "mp3", 
-                "preferredquality": "192"
-            }]
-        }
-
-        downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-        return downloaded_file, True
+        try:
+            getAudio = requests.get(f"{YTPROXY}/info/{vid_id}", headers=headers, timeout=60)
+            songData = getAudio.json()
+            if songData.get('status') == 'success':
+                audio_url = songData['audio_url']
+                return await download_with_requests(audio_url, filepath, headers), True
+        except Exception as e:
+            logger.error(f"API Error: {e}")
+        
+        return None, False
