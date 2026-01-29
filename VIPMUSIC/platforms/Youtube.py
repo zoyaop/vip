@@ -17,7 +17,7 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
-# API keys rotation
+# API keys rotation (unchanged)
 API_KEYS = [k.strip() for k in config.API_KEY.split(",") if k.strip()]
 current_key_index = 0
 
@@ -41,13 +41,13 @@ def get_cookie_file():
         folder = f"{os.getcwd()}/cookies"
         txt_files = glob.glob(os.path.join(folder, '*.txt'))
         if not txt_files:
-            logger.warning("Cookies folder mein koi .txt file nahi mila → fresh cookies daalo for better success")
+            logger.warning("Cookies folder empty → fresh cookies daalo (Chrome export) for less 403")
             return None
         cookie = random.choice(txt_files)
-        logger.info(f"Cookie use kar raha: {os.path.basename(cookie)}")
+        logger.info(f"Using cookie: {os.path.basename(cookie)}")
         return cookie
     except Exception as e:
-        logger.error(f"Cookie load error: {e}")
+        logger.error(f"Cookie error: {e}")
         return None
 
 class YouTubeAPI:
@@ -163,9 +163,6 @@ class YouTubeAPI:
                 return None
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> tuple:
-        """
-        Sirf audio (MP3) download karega – video mode ignore kiya gaya hai
-        """
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
@@ -178,15 +175,23 @@ class YouTubeAPI:
             "continuedl": True,
             "retries": 15,
             "fragment_retries": 10,
+            # Critical 403 fix (Jan 2026): Disable blocked android_sdkless client
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["default", "ios", "web"],
+                    "-android_sdkless": None,
+                }
+            },
+            # Optional: Add this if you have Deno installed
+            # "verbose": True,  # Uncomment for debug logs
         }
 
-        # Impersonate try karo agar curl_cffi installed hai
         try:
             import curl_cffi
-            common_opts["impersonate"] = "chrome"  # auto recent version
-            logger.info("curl_cffi detected → impersonate 'chrome' ON")
+            common_opts["impersonate"] = "chrome"
+            logger.info("Impersonate enabled")
         except ImportError:
-            logger.warning("curl_cffi nahi mila → impersonate OFF (better quality ke liye install kar lo: pip install yt-dlp[default,curl-cffi])")
+            logger.warning("curl_cffi missing → impersonate off")
 
         if cookie:
             common_opts["cookiefile"] = cookie
@@ -200,33 +205,30 @@ class YouTubeAPI:
         success = False
 
         try:
-            # Force audio only – MP3 conversion
             opts = {
                 **common_opts,
-                "format": "bestaudio[ext=m4a]/bestaudio/best",  # Best native audio (m4a/opus usually)
+                "format": "bestaudio[ext=m4a]/bestaudio/best",
                 "outtmpl": f"downloads/{title}.%(ext)s",
                 "postprocessors": [{
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "mp3",
-                    "preferredquality": "192",  # 192kbps – acha balance (0 for best ~320kbps)
+                    "preferredquality": "192",
                 }],
-                "keepvideo": False,  # Temp files delete kar de
+                "keepvideo": False,
             }
 
             downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
             success = True
-            logger.info(f"MP3 Download successful: {downloaded_file}")
+            logger.info(f"MP3 success: {downloaded_file}")
 
         except Exception as e:
-            logger.error(f"Main audio download fail: {str(e)}")
-            # Fallback: Direct m4a format (140 = common ~128kbps audio, bahut stable)
+            logger.error(f"Main fail: {e}")
             try:
-                opts["format"] = "140"
-                # Postprocessor rakho taaki MP3 ban jaye
+                opts["format"] = "140/251/bestaudio"  # Stable audio formats
                 downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
                 success = True
-                logger.info(f"Fallback audio (140 → MP3) success: {downloaded_file}")
+                logger.info(f"Fallback success: {downloaded_file}")
             except Exception as fb_e:
-                logger.error(f"Fallback bhi fail: {str(fb_e)}")
+                logger.error(f"Fallback fail: {fb_e}")
 
         return downloaded_file, success
