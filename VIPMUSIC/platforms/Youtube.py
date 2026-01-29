@@ -54,6 +54,7 @@ class YouTubeAPI:
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
+        # Updated User-Agent to bypass bot detection
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
     def parse_duration(self, duration):
@@ -118,14 +119,15 @@ class YouTubeAPI:
         title, d_min, d_sec, thumb, vidid = res
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
-    # --- VIDEO PLAY OFF: SIRF AUDIO LINK FETCH KAREGA ---
+    # --- STREAM LINK FETCH (Play/vPlay ke liye) ---
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         cookie = get_cookie_file()
         
-        # Format ko change karke sirf 'bestaudio' kar diya gaya hai
+        # Audio aur Video dono ke liye format support
         opts = [
-            "yt-dlp", "-g", "-f", "bestaudio/best", 
+            "yt-dlp", "-g", 
+            "-f", "best[height<=?720]/bestaudio/best", 
             "--geo-bypass", 
             "--user-agent", self.user_agent,
             "--extractor-args", "youtube:player_client=android,web;skip=dash,hls",
@@ -164,12 +166,13 @@ class YouTubeAPI:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
 
-    # --- DOWNLOAD: SIRF AUDIO (MP3) HI DOWNLOAD HOGA ---
+    # --- DOWNLOAD: AUDIO (MP3) AUR VIDEO (MP4) DONO KE LIYE ---
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
         
+        # Robust Bypass options
         common_opts = {
             "quiet": True, 
             "no_warnings": True, 
@@ -182,7 +185,7 @@ class YouTubeAPI:
                     "skip": ["dash", "hls"]
                 }
             },
-            "retries": 5
+            "retries": 10 # Zyada retries for safety
         }
         if cookie: common_opts["cookiefile"] = cookie
 
@@ -191,17 +194,34 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
-        # Video option ko override karke hamesha audio download karega
-        opts = {
-            **common_opts, 
-            "format": "bestaudio/best", 
-            "outtmpl": f"downloads/{title}.%(ext)s", 
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio", 
-                "preferredcodec": "mp3", 
-                "preferredquality": "192"
-            }]
-        }
+        # 1. AUDIO DOWNLOAD LOGIC (MP3)
+        if songaudio:
+            opts = {
+                **common_opts, 
+                "format": "bestaudio/best", 
+                "outtmpl": f"downloads/{title}.%(ext)s", 
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio", 
+                    "preferredcodec": "mp3", 
+                    "preferredquality": "192"
+                }]
+            }
+        # 2. VIDEO DOWNLOAD LOGIC (MP4)
+        elif songvideo:
+            opts = {
+                **common_opts, 
+                "format": f"{format_id if format_id else 'bestvideo+bestaudio'}/best", 
+                "outtmpl": f"downloads/{title}.%(ext)s", 
+                "merge_output_format": "mp4"
+            }
+        # 3. DEFAULT (Agar kuch specify na ho toh Audio)
+        else:
+            opts = {
+                **common_opts, 
+                "format": "bestaudio/best", 
+                "outtmpl": f"downloads/{title}.%(ext)s",
+                "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]
+            }
 
         try:
             downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
