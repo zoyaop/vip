@@ -13,8 +13,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 import config
-from VIPMUSIC import LOGGER
-from VIPMUSIC.utils.formatters import time_to_seconds
+from AnonMusic import LOGGER
+from AnonMusic.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
@@ -54,7 +54,7 @@ class YouTubeAPI:
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
-        # Updated User-Agent to bypass bot detection
+        # Bypass ke liye User-Agent
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
     def parse_duration(self, duration):
@@ -85,6 +85,7 @@ class YouTubeAPI:
                         return entity.url
         return None
 
+    # Metadata ke liye API v3 ka hi use
     async def details(self, link: str, videoid: Union[bool, str] = None):
         if videoid: 
             vidid = link
@@ -119,15 +120,14 @@ class YouTubeAPI:
         title, d_min, d_sec, thumb, vidid = res
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
-    # --- STREAM LINK FETCH (Play/vPlay ke liye) ---
+    # Stream link nikalne ke liye optimized yt-dlp
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         cookie = get_cookie_file()
         
-        # Audio aur Video dono ke liye format support
+        # FIX: Android client force karna "video data" error ke liye
         opts = [
-            "yt-dlp", "-g", 
-            "-f", "best[height<=?720]/bestaudio/best", 
+            "yt-dlp", "-g", "-f", "best[height<=?720]", 
             "--geo-bypass", 
             "--user-agent", self.user_agent,
             "--extractor-args", "youtube:player_client=android,web;skip=dash,hls",
@@ -143,6 +143,7 @@ class YouTubeAPI:
         if videoid: link = self.listbase + link
         cookie = get_cookie_file()
         cookie_arg = f"--cookies {cookie}" if cookie else ""
+        # Flat playlist ke liye yt-dlp sahi hai
         cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
         playlist = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, _ = await playlist.communicate()
@@ -166,13 +167,13 @@ class YouTubeAPI:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
 
-    # --- DOWNLOAD: AUDIO (MP3) AUR VIDEO (MP4) DONO KE LIYE ---
+    # Download ke liye sabse zyada settings ki zaroorat hai
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
         
-        # Robust Bypass options
+        # Bypassing YouTube Restrictions
         common_opts = {
             "quiet": True, 
             "no_warnings": True, 
@@ -185,7 +186,7 @@ class YouTubeAPI:
                     "skip": ["dash", "hls"]
                 }
             },
-            "retries": 10 # Zyada retries for safety
+            "retries": 5
         }
         if cookie: common_opts["cookiefile"] = cookie
 
@@ -194,34 +195,12 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
-        # 1. AUDIO DOWNLOAD LOGIC (MP3)
-        if songaudio:
-            opts = {
-                **common_opts, 
-                "format": "bestaudio/best", 
-                "outtmpl": f"downloads/{title}.%(ext)s", 
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio", 
-                    "preferredcodec": "mp3", 
-                    "preferredquality": "192"
-                }]
-            }
-        # 2. VIDEO DOWNLOAD LOGIC (MP4)
-        elif songvideo:
-            opts = {
-                **common_opts, 
-                "format": f"{format_id if format_id else 'bestvideo+bestaudio'}/best", 
-                "outtmpl": f"downloads/{title}.%(ext)s", 
-                "merge_output_format": "mp4"
-            }
-        # 3. DEFAULT (Agar kuch specify na ho toh Audio)
+        if songvideo:
+            opts = {**common_opts, "format": f"{format_id}+140/bestvideo+bestaudio", "outtmpl": f"downloads/{title}.%(ext)s", "merge_output_format": "mp4"}
+        elif songaudio:
+            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]}
         else:
-            opts = {
-                **common_opts, 
-                "format": "bestaudio/best", 
-                "outtmpl": f"downloads/{title}.%(ext)s",
-                "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]
-            }
+            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"}
 
         try:
             downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
