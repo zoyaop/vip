@@ -4,6 +4,7 @@ import json
 import os
 import random
 import re
+import sys  # ← flush ke liye zaroori
 from typing import Union
 
 import yt_dlp
@@ -25,9 +26,8 @@ current_key_index = 0
 def get_youtube_client():
     global current_key_index
     if current_key_index >= len(API_KEYS):
-        logger.error("Sab YouTube API keys khatam!")
+        logger.error("All YouTube API keys exhausted!")
         return None
-    # cache_discovery=False → warning suppress karega
     return build("youtube", "v3", developerKey=API_KEYS[current_key_index],
                  cache_discovery=False, static_discovery=False)
 
@@ -47,7 +47,7 @@ def get_cookie_file():
         if not txt_files:
             return None
         cookie = random.choice(txt_files)
-        logger.info(f"Using cookie: {cookie}")
+        print(f"[COOKIE] Using: {cookie}", flush=True)
         return cookie
     except Exception:
         return None
@@ -64,91 +64,24 @@ class YouTubeAPI:
         m = int(match.group(2) or 0)
         s = int(match.group(3) or 0)
         total = h * 3600 + m * 60 + s
-        return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}", total
+        dur_str = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+        return dur_str, total
 
-    async def exists(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: link = self.base + link
-        return bool(re.search(self.regex, link))
-
-    async def url(self, message: Message) -> Union[str, None]:
-        messages = [message, message.reply_to_message] if message.reply_to_message else [message]
-        for msg in messages:
-            if msg.entities:
-                for entity in msg.entities:
-                    if entity.type == MessageEntityType.URL:
-                        return (msg.text or msg.caption)[entity.offset:entity.offset + entity.length]
-            if msg.caption_entities:
-                for entity in msg.caption_entities:
-                    if entity.type == MessageEntityType.TEXT_LINK:
-                        return entity.url
-        return None
-
-    async def details(self, link: str, videoid: Union[bool, str] = None):
-        vidid = link if videoid else re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link).group(1) if re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link) else None
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
-            try:
-                if not vidid:
-                    search = await asyncio.to_thread(youtube.search().list(q=link, part="id", maxResults=1, type="video").execute)
-                    if not search.get("items"): return None
-                    vidid = search["items"][0]["id"]["videoId"]
-                
-                data = await asyncio.to_thread(youtube.videos().list(part="snippet,contentDetails", id=vidid).execute)
-                if not data.get("items"): return None
-                item = data["items"][0]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                dur_str, dur_sec = self.parse_duration(item["contentDetails"]["duration"])
-                return title, dur_str, dur_sec, thumb, vidid
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
-                logger.error(f"API error: {e}")
-                return None
-
-    async def track(self, link: str, videoid: Union[bool, str] = None):
-        res = await self.details(link, videoid)
-        if not res: return None, None
-        title, d_min, d_sec, thumb, vidid = res
-        return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
-
-    async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
-            try:
-                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not search.get("items"): return None
-                item = search["items"][query_type % len(search["items"])]
-                vidid = item["id"]["videoId"]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                vd = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(vd["items"][0]["contentDetails"]["duration"])
-                return title, d_min, thumb, vidid
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
-                return None
-
-    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
-        if videoid: link = self.listbase + link
-        cookie = get_cookie_file()
-        cookie_arg = f"--cookies {cookie}" if cookie else ""
-        cmd = f'yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download "{link}"'
-        proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, _ = await proc.communicate()
-        return [k.strip() for k in stdout.decode().splitlines() if k.strip()]
+    # ... (exists, url, details, track, slider, playlist functions same rakh sakte ho, change nahi zaroori abhi)
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None):
-        if videoid: link = self.base + videoid
+        if videoid:
+            link = self.base + videoid
+
+        print(f"[DOWNLOAD START] Link: {link} | Title: {title}", flush=True)
 
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
 
         common_opts = {
             "quiet": False,
-            "verbose": True,               # ← full yt-dlp logs terminal pe
             "no_warnings": False,
+            "verbose": True,
             "geo_bypass": True,
             "nocheckcertificate": True,
             "continuedl": True,
@@ -157,23 +90,34 @@ class YouTubeAPI:
         }
         if cookie:
             common_opts["cookiefile"] = cookie
-            print(f"[COOKIE] → {cookie}")
 
         os.makedirs("downloads", exist_ok=True)
 
-        try:
+        # Progress hook taaki real-time update dikhe
+        def progress_hook(d):
+            if d['status'] == 'downloading':
+                print(f"[PROGRESS] {d.get('_percent_str', '??%')} | {d.get('_eta_str', '??s left')}", flush=True)
+            elif d['status'] == 'finished':
+                print("[PROGRESS] Download complete, now post-processing...", flush=True)
+
+        def run_ytdl():
+            print("[INSIDE THREAD] yt-dlp version:", yt_dlp.version.__version__, flush=True)
+            print("[INSIDE THREAD] Starting extraction...", flush=True)
+            sys.stdout.flush()
+
+            opts = {**common_opts}
+            opts['progress_hooks'] = [progress_hook]  # ← real progress
+
             if songvideo:
-                print(f"[VIDEO DOWNLOAD] {title}")
-                opts = {
-                    **common_opts,
+                print("[MODE] Video + Audio", flush=True)
+                opts.update({
                     "format": f"{format_id}+bestaudio/best" if format_id else "bestvideo[height<=?720]+bestaudio/best",
                     "outtmpl": f"downloads/{title} - %(id)s.%(ext)s",
                     "merge_output_format": "mp4",
-                }
+                })
             elif songaudio:
-                print(f"[AUDIO DOWNLOAD] {title}")
-                opts = {
-                    **common_opts,
+                print("[MODE] Audio MP3", flush=True)
+                opts.update({
                     "format": "bestaudio/best",
                     "outtmpl": f"downloads/{title} - %(id)s.%(ext)s",
                     "postprocessors": [{
@@ -181,40 +125,41 @@ class YouTubeAPI:
                         "preferredcodec": "mp3",
                         "preferredquality": "192",
                     }],
-                }
+                })
             else:
-                print("[DEFAULT AUDIO DOWNLOAD]")
-                opts = {
-                    **common_opts,
+                print("[MODE] Default Audio", flush=True)
+                opts.update({
                     "format": "bestaudio/best",
                     "outtmpl": "downloads/%(title)s - %(id)s.%(ext)s",
-                }
+                })
 
-            def run_ytdl():
-                print("[YT-DLP VERSION]:", yt_dlp.version.__version__)
-                print("[OPTIONS]:", json.dumps(opts, indent=2, default=str))
-                print(f"[LINK]: {link}")
+            sys.stdout.flush()
 
-                with yt_dlp.YoutubeDL(opts) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                try:
                     info = ydl.extract_info(link, download=True)
                     filename = ydl.prepare_filename(info)
-                    print(f"[FILE SAVED]: {filename}")
+                    print(f"[THREAD SUCCESS] File: {filename}", flush=True)
                     if os.path.exists(filename):
-                        size = os.path.getsize(filename) / (1024 * 1024)
-                        print(f"[SIZE]: {size:.2f} MB")
+                        size_mb = os.path.getsize(filename) / (1024 * 1024)
+                        print(f"[SIZE] {size_mb:.2f} MB", flush=True)
                     return filename
+                except Exception as e:
+                    print(f"[THREAD ERROR] {type(e).__name__}: {str(e)}", flush=True)
+                    sys.stdout.flush()
+                    raise
 
-            file_path = await loop.run_in_executor(None, run_ydl)
-
+        try:
+            file_path = await loop.run_in_executor(None, run_ytdl)
             if file_path and os.path.exists(file_path):
-                print(f"[SUCCESS] → {file_path}")
+                print(f"[MAIN SUCCESS] Downloaded: {file_path}", flush=True)
                 return file_path, True
-            print("[FAIL] File not found on disk!")
+            print("[MAIN FAIL] File not on disk", flush=True)
             return None, False
 
         except Exception as ex:
-            print("[DOWNLOAD CRASH]")
+            print(f"[MAIN CRASH] {type(ex).__name__}: {str(ex)}", flush=True)
             import traceback
-            traceback.print_exc()
-            logger.exception("Download failed")
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
             return None, False
