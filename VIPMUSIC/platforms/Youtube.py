@@ -19,7 +19,6 @@ logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 def get_youtube_client():
     if not config.API_KEY:
         return None
-    # Split keys if comma separated
     keys = config.API_KEY.split(",") if isinstance(config.API_KEY, str) and "," in config.API_KEY else [config.API_KEY]
     selected_key = str(random.choice(keys)).strip()
     try:
@@ -33,7 +32,7 @@ def parse_duration(duration):
     if not match: return 0, "00:00"
     h, m, s = [int(match.group(i) or 0) for i in range(1, 4)]
     total = h * 3600 + m * 60 + s
-    return total, (f"{h}:{m:02d}:{seconds:02d}" if h > 0 else f"{m}:{s:02d}")
+    return total, (f"{h}:{m:02d}:{s:02d}" if h > 0 else f"{m}:{s:02d}")
 
 class YouTubeAPI:
     def __init__(self):
@@ -41,6 +40,7 @@ class YouTubeAPI:
         self.regex = r"(?:youtube\.com|youtu\.be)"
 
     def extract_id(self, url):
+        if not url or "None" in str(url): return None
         match = re.search(r"(?:v=|\/|embed\/|youtu.be\/)([0-9A-Za-z_-]{11})", url)
         return match.group(1) if match else None
 
@@ -58,8 +58,8 @@ class YouTubeAPI:
         return None
 
     async def details(self, link: str, videoid=None):
-        vid = videoid or self.extract_id(link)
-        if not vid: return None
+        vid = videoid if (videoid and videoid != "None") else self.extract_id(link)
+        if not vid or vid == "None": return None
         
         # Method 1: Google API
         client = get_youtube_client()
@@ -69,13 +69,11 @@ class YouTubeAPI:
                 res = await loop.run_in_executor(None, lambda: client.videos().list(part="snippet,contentDetails", id=vid).execute())
                 if res.get("items"):
                     item = res["items"][0]
-                    title = item["snippet"]["title"]
-                    thumb = item["snippet"]["thumbnails"]["high"]["url"]
                     dur_sec, dur_min = parse_duration(item["contentDetails"]["duration"])
-                    return title, dur_min, dur_sec, thumb, vid
+                    return item["snippet"]["title"], dur_min, dur_sec, item["snippet"]["thumbnails"]["high"]["url"], vid
             except: pass
 
-        # Method 2: Fallback to yt-dlp
+        # Method 2: Fallback
         try:
             with YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
                 info = await asyncio.get_event_loop().run_in_executor(None, lambda: ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False))
@@ -85,24 +83,66 @@ class YouTubeAPI:
     async def track(self, link, videoid=None):
         res = await self.details(link, videoid)
         if not res:
-            # All keys must be present to avoid KeyError in play.py
             return {
                 "title": "Unknown Track",
-                "link": link,
+                "link": "https://www.youtube.com",
                 "vidid": "None",
                 "duration_min": "00:00",
                 "thumb": None
             }, None
         
-        data = {
-            "title": res[0],
-            "link": self.base + res[4],
-            "vidid": res[4],
-            "duration_min": res[1],
-            "thumb": res[3]
-        }
+        data = {"title": res[0], "link": self.base + res[4], "vidid": res[4], "duration_min": res[1], "thumb": res[3]}
         return data, res[4]
 
+    async def slider(self, query, query_type, videoid=None):
+        if not query or query == "None": return None
+        client = get_youtube_client()
+        if client:
+            try:
+                res = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search().list(q=query, part="id", maxResults=10, type="video").execute())
+                items = res.get("items", [])
+                if items and len(items) > query_type:
+                    vid = items[query_type]["id"].get("videoId")
+                    if vid: return await self.details(vid, videoid=True)
+            except: pass
+        return None
+
+    async def download(self, link, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None):
+        # Yahan check karein ki link 'None' toh nahi
+        if videoid:
+            if not videoid or videoid == "None": return None
+            link = self.base + videoid
+        
+        if not link or "None" in str(link): return None
+        
+        loop = asyncio.get_running_loop()
+        def dl(opts):
+            with YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=True)
+                return ydl.prepare_filename(info)
+
+        opts = {"quiet": True, "no_warnings": True, "geo_bypass": True}
+        try:
+            if songvideo:
+                opts.update({"format": f"{format_id}+140", "outtmpl": f"downloads/{title}.mp4", "merge_output_format": "mp4"})
+                return await loop.run_in_executor(None, lambda: dl(opts))
+            elif songaudio:
+                opts.update({"format": format_id, "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]})
+                return await loop.run_in_executor(None, lambda: dl(opts))
+            elif video:
+                if await is_on_off(config.YTDOWNLOADER):
+                    opts.update({"format": "(bestvideo[height<=720])+(bestaudio[ext=m4a])", "outtmpl": "downloads/%(id)s.%(ext)s"})
+                    return await loop.run_in_executor(None, lambda: dl(opts)), True
+                else:
+                    proc = await asyncio.create_subprocess_shell(f"yt-dlp -g -f 'best[height<=720]' {link}", stdout=asyncio.subprocess.PIPE)
+                    out, _ = await proc.communicate()
+                    return out.decode().split("\n")[0], None
+            else:
+                opts.update({"format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"})
+                return await loop.run_in_executor(None, lambda: dl(opts)), True
+        except: return None
+
+    # Baaki helpers...
     async def playlist(self, link, limit, user_id, videoid=None):
         pid = link.split("list=")[1].split("&")[0] if "list=" in link else link
         client = get_youtube_client()
@@ -113,56 +153,11 @@ class YouTubeAPI:
             except: pass
         return []
 
-    async def slider(self, query, query_type, videoid=None):
-        client = get_youtube_client()
-        if client:
-            try:
-                res = await asyncio.get_event_loop().run_in_executor(None, lambda: client.search().list(q=query, part="id", maxResults=10, type="video").execute())
-                vid = res["items"][query_type]["id"]["videoId"]
-                return await self.details(vid, videoid=True)
-            except: pass
-        return None
-
-    async def download(self, link, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None):
-        if videoid: link = self.base + link
-        loop = asyncio.get_running_loop()
-        def dl(opts):
-            with YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(link, download=True)
-                return ydl.prepare_filename(info)
-
-        opts = {"quiet": True, "no_warnings": True, "geo_bypass": True}
-        if songvideo:
-            opts.update({"format": f"{format_id}+140", "outtmpl": f"downloads/{title}.mp4", "merge_output_format": "mp4"})
-            return await loop.run_in_executor(None, lambda: dl(opts))
-        elif songaudio:
-            opts.update({"format": format_id, "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]})
-            return await loop.run_in_executor(None, lambda: dl(opts))
-        elif video:
-            if await is_on_off(config.YTDOWNLOADER):
-                opts.update({"format": "(bestvideo[height<=720])+(bestaudio[ext=m4a])", "outtmpl": "downloads/%(id)s.%(ext)s"})
-                return await loop.run_in_executor(None, lambda: dl(opts)), True
-            else:
-                proc = await asyncio.create_subprocess_shell(f"yt-dlp -g -f 'best[height<=720]' {link}", stdout=asyncio.subprocess.PIPE)
-                out, _ = await proc.communicate()
-                return out.decode().split("\n")[0], None
-        else:
-            opts.update({"format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"})
-            return await loop.run_in_executor(None, lambda: dl(opts)), True
-
-    # Extra helper methods for compatibility
     async def title(self, link, videoid=None):
         res = await self.details(link, videoid); return res[0] if res else "Unknown"
     async def duration(self, link, videoid=None):
         res = await self.details(link, videoid); return res[1] if res else "00:00"
     async def thumbnail(self, link, videoid=None):
         res = await self.details(link, videoid); return res[3] if res else None
-    async def formats(self, link, videoid=None):
-        if videoid: link = self.base + link
-        try:
-            with YoutubeDL({"quiet": True}) as ydl:
-                r = await asyncio.get_event_loop().run_in_executor(None, lambda: ydl.extract_info(link, download=False))
-                return [{"format": f.get("format"), "format_id": f.get("format_id"), "ext": f.get("ext")} for f in r["formats"] if "dash" not in str(f.get("format")).lower()], link
-        except: return [], link
     async def exists(self, link, videoid=None):
-        return True if videoid or re.search(self.regex, link) else False
+        return True if (videoid and videoid != "None") or re.search(self.regex, link) else False
