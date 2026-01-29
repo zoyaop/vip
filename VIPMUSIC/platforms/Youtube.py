@@ -38,7 +38,7 @@ def switch_key():
     global current_key_index
     current_key_index += 1
     if current_key_index < len(API_KEYS):
-        logger.warning(f"⚠️ Switching to API Key #{current_key_index + 1}")
+        logger.warning(f"⚠️ YouTube API Switched to Key #{current_key_index + 1}")
         return True
     return False
 
@@ -57,13 +57,37 @@ class YouTubeAPI:
         self.listbase = "https://youtube.com/playlist?list="
 
     def parse_duration(self, duration):
+        """ISO 8601 duration conversion"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
-        h, m, s = int(match.group(1) or 0), int(match.group(2) or 0), int(match.group(3) or 0)
-        total = h * 3600 + m * 60 + s
-        return f"{h:02d}:{m:02d}:{seconds:02d}" if h > 0 else f"{m:02d}:{s:02d}", total
+        hours = int(match.group(1) or 0)
+        minutes = int(match.group(2) or 0)
+        seconds = int(match.group(3) or 0)
+        total_seconds = hours * 3600 + minutes * 60 + seconds
+        duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
+        return duration_str, total_seconds
+
+    async def exists(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        return bool(re.search(self.regex, link))
+
+    async def url(self, message: Message) -> Union[str, None]:
+        """Extraxt URL from message or reply (Fixed AttributeError)"""
+        messages = [message]
+        if message.reply_to_message:
+            messages.append(message.reply_to_message)
+        for msg in messages:
+            if msg.entities:
+                for entity in msg.entities:
+                    if entity.type == MessageEntityType.URL:
+                        return (msg.text or msg.caption)[entity.offset : entity.offset + entity.length]
+            if msg.caption_entities:
+                for entity in msg.caption_entities:
+                    if entity.type == MessageEntityType.TEXT_LINK:
+                        return entity.url
+        return None
 
     async def fetch_yt_dlp_info(self, query):
-        """API Fail hone par ye function search sambhalega (Fallback)"""
+        """API Fail hone par Fallback search logic"""
         logger.info(f"Using yt-dlp fallback for: {query}")
         opts = {"quiet": True, "extract_flat": True, "skip_download": True}
         cookie = get_cookie_file()
@@ -72,9 +96,9 @@ class YouTubeAPI:
         with yt_dlp.YoutubeDL(opts) as ydl:
             try:
                 info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{query}", download=False)
-                if not info or not info['entries']: return None
+                if not info or not info.get('entries'): return None
                 video = info['entries'][0]
-                return video['title'], "00:00", 0, video['thumbnails'][0]['url'], video['id']
+                return video.get('title'), "00:00", 0, video.get('thumbnails')[0]['url'], video.get('id')
             except Exception as e:
                 logger.error(f"yt-dlp Fallback Failed: {e}")
                 return None
@@ -89,7 +113,6 @@ class YouTubeAPI:
         while True:
             youtube = get_youtube_client()
             if not youtube:
-                # Agar saari keys khatam, toh yt-dlp use karo
                 return await self.fetch_yt_dlp_info(link)
 
             try:
@@ -110,7 +133,8 @@ class YouTubeAPI:
             except HttpError as e:
                 if e.resp.status in [403, 400, 429] and switch_key():
                     continue
-                # Agar switch fail ho gaya, toh yt-dlp fallback
+                return await self.fetch_yt_dlp_info(link)
+            except Exception:
                 return await self.fetch_yt_dlp_info(link)
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
@@ -124,6 +148,7 @@ class YouTubeAPI:
         cookie = get_cookie_file()
         opts = ["yt-dlp", "-g", "-f", "best[height<=?720]", "--geo-bypass", link]
         if cookie: opts.extend(["--cookies", cookie])
+        
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate()
         return (1, stdout.decode().split("\n")[0]) if stdout else (0, stderr.decode())
@@ -140,14 +165,16 @@ class YouTubeAPI:
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
         while True:
             youtube = get_youtube_client()
-            if not youtube: return None # Slider typically needs API
+            if not youtube: return None
             try:
                 search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
                 if not search.get("items"): return None
+                
                 item = search["items"][query_type]
                 vidid = item["id"]["videoId"]
                 title = item["snippet"]["title"]
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
+                
                 v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
                 d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
                 return title, d_min, thumb, vidid
