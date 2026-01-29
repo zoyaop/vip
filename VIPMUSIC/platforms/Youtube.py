@@ -12,13 +12,14 @@ from pyrogram.types import Message
 from googleapiclient.discovery import build 
 from googleapiclient.errors import HttpError
 
-import config
 from VIPMUSIC import LOGGER
 from VIPMUSIC.utils.formatters import time_to_seconds
+import config
 
 logger = LOGGER(__name__)
 
-# --- API SEQUENTIAL ROTATION ---
+# --- API ROTATION LOGIC ---
+# Config mein API_KEY ko comma se separate karke likhein (e.g. KEY1,KEY2)
 API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
 current_key_index = 0
 
@@ -34,10 +35,11 @@ def switch_key():
     if current_key_index < len(API_KEYS):
         logger.warning(f"YouTube Quota Finished. Switching to Key #{current_key_index + 1}")
         return True
+    logger.error("All YouTube API Keys are exhausted!")
     return False
 
 # --- COOKIE LOGIC ---
-def get_cookie_file():
+def cookie_txt_file():
     try:
         folder_path = f"{os.getcwd()}/cookies"
         txt_files = glob.glob(os.path.join(folder_path, '*.txt'))
@@ -54,6 +56,7 @@ class YouTubeAPI:
         self.listbase = "https://youtube.com/playlist?list="
 
     def parse_duration(self, duration):
+        """ISO 8601 duration conversion (PT1M30S -> 90s)"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
         hours = int(match.group(1) or 0)
         minutes = int(match.group(2) or 0)
@@ -82,7 +85,8 @@ class YouTubeAPI:
         return None
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: vidid = link
+        if videoid: 
+            vidid = link
         else:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
@@ -100,7 +104,11 @@ class YouTubeAPI:
                 if not video_data.get("items"): return None
                 
                 item = video_data["items"][0]
-                return item["snippet"]["title"], *self.parse_duration(item["contentDetails"]["duration"]), item["snippet"]["thumbnails"]["high"]["url"], vidid
+                title = item["snippet"]["title"]
+                thumb = item["snippet"]["thumbnails"]["high"]["url"]
+                d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
+                return title, d_min, d_sec, thumb, vidid
+
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
@@ -111,18 +119,15 @@ class YouTubeAPI:
         title, d_min, d_sec, thumb, vidid = res
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
-    # --- STRICT AUDIO STREAMING ONLY ---
+    # --- STREAMING LOGIC (Audio Only Fix) ---
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
-        cookie = get_cookie_file()
+        cookie = cookie_txt_file()
         
-        # Sirf audio stream fetch karne ke liye settings
+        # Patched options to bypass 403 and force audio
         opts = [
-            "yt-dlp",
-            "-g", 
-            "-f", "bestaudio/best", # Force audio only
-            "--geo-bypass",
-            "--nocheckcertificate",
+            "yt-dlp", "-g", "-f", "bestaudio/best",
+            "--geo-bypass", "--nocheckcertificate",
             "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
             "--extractor-args", "youtube:player_client=ios,android,web",
             link
@@ -131,27 +136,48 @@ class YouTubeAPI:
         
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate()
-        
-        if stdout:
-            return (1, stdout.decode().split("\n")[0])
-        else:
-            logger.error(f"Audio Stream Error: {stderr.decode()}")
-            return (0, stderr.decode())
+        return (1, stdout.decode().split("\n")[0]) if stdout else (0, stderr.decode())
 
+    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
+        if videoid: link = self.listbase + link
+        cookie = cookie_txt_file()
+        cookie_arg = f"--cookies {cookie}" if cookie else ""
+        cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
+        playlist = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await playlist.communicate()
+        return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
+
+    async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
+        while True:
+            youtube = get_youtube_client()
+            if not youtube: return None
+            try:
+                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
+                if not search.get("items"): return None
+                
+                item = search["items"][query_type]
+                vidid = item["id"]["videoId"]
+                title = item["snippet"]["title"]
+                thumb = item["snippet"]["thumbnails"]["high"]["url"]
+                
+                v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
+                d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
+                return title, d_min, thumb, vidid
+            except HttpError as e:
+                if e.resp.status == 403 and switch_key(): continue
+                return None
+
+    # --- DOWNLOAD LOGIC (Direct yt-dlp, No Proxy) ---
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
-        cookie = get_cookie_file()
+        cookie = cookie_txt_file()
         
-        # Audio download settings
         common_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "nocheckcertificate": True,
-            "http_chunk_size": 1048576,
-            "extractor_args": {'youtube': {'player_client': ['ios', 'android', 'web']}},
+            "quiet": True, "no_warnings": True, "geo_bypass": True, "nocheckcertificate": True,
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "extractor_args": {'youtube': {'player_client': ['ios', 'android', 'web']}},
+            "http_chunk_size": 1048576,
         }
         if cookie: common_opts["cookiefile"] = cookie
 
@@ -160,7 +186,7 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
-        # Video request ko bhi audio mein convert kar dega
+        # Hamesha audio hi download karega (Video off request par bhi)
         opts = {
             **common_opts, 
             "format": "bestaudio/best", 
