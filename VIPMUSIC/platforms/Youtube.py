@@ -19,7 +19,7 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 logger = LOGGER(__name__)
 
 # --- API SEQUENTIAL ROTATION LOGIC ---
-API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
+API_KEYS = [k.strip() for k in config.API_KEY.split(",") if k.strip()]
 current_key_index = 0
 
 def get_youtube_client():
@@ -37,16 +37,19 @@ def switch_key():
     logger.error("All YouTube API Keys are exhausted!")
     return False
 
-# --- COOKIE LOGIC (As per your file) ---
+# --- COOKIE LOGIC ---
 def get_cookie_file():
     try:
         folder_path = f"{os.getcwd()}/cookies"
         txt_files = glob.glob(os.path.join(folder_path, '*.txt'))
         if not txt_files:
+            logger.warning("No cookie files found in /cookies folder")
             return None
         cookie_file = random.choice(txt_files)
+        logger.info(f"Selected cookie file: {os.path.basename(cookie_file)}")
         return cookie_file
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error loading cookie: {e}")
         return None
 
 class YouTubeAPI:
@@ -111,6 +114,7 @@ class YouTubeAPI:
 
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
+                logger.error(f"YouTube API error: {e}")
                 return None
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
@@ -127,16 +131,20 @@ class YouTubeAPI:
         
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate()
-        return (1, stdout.decode().split("\n")[0]) if stdout else (0, stderr.decode())
+        if stdout:
+            return 1, stdout.decode().split("\n")[0].strip()
+        logger.error(f"yt-dlp video url fetch error: {stderr.decode()}")
+        return 0, None
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid: link = self.listbase + link
         cookie = get_cookie_file()
         cookie_arg = f"--cookies {cookie}" if cookie else ""
         cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
-        playlist = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, _ = await playlist.communicate()
-        return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
+        playlist_proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await playlist_proc.communicate()
+        ids = [k.strip() for k in stdout.decode().split("\n") if k.strip()]
+        return ids
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
         while True:
@@ -146,7 +154,6 @@ class YouTubeAPI:
                 search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
                 if not search.get("items"): return None
                 
-                # Filter Logic (You can add duration filters here if needed)
                 item = search["items"][query_type]
                 vidid = item["id"]["videoId"]
                 title = item["snippet"]["title"]
@@ -157,29 +164,72 @@ class YouTubeAPI:
                 return title, d_min, thumb, vidid
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
+                logger.error(f"Slider API error: {e}")
                 return None
 
-    async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
+    async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> tuple:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
-        
-        common_opts = {"quiet": True, "no_warnings": True, "geo_bypass": True, "nocheckcertificate": True}
-        if cookie: common_opts["cookiefile"] = cookie
+
+        common_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "nocheckcertificate": True,
+            "continuedl": True,
+            "retries": 10,
+            # 2026 fixes — very important
+            "impersonate": "chrome",                    # or "chrome:windows"
+            "extractor_args": {"youtube": {"player_client": ["default", "ios", "web"], "-android_sdkless": None}},
+        }
+        if cookie:
+            common_opts["cookiefile"] = cookie
 
         def ytdl_run(opts):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
-        if songvideo:
-            fpath = f"downloads/{title}.mp4"
-            opts = {**common_opts, "format": f"{format_id}+140/bestvideo+bestaudio", "outtmpl": f"downloads/{title}.%(ext)s", "merge_output_format": "mp4"}
-        elif songaudio:
-            fpath = f"downloads/{title}.mp3"
-            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]}
-        else:
-            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"}
+        try:
+            if songvideo:
+                fpath = f"downloads/{title}.mp4"
+                opts = {
+                    **common_opts,
+                    "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best",
+                    "outtmpl": f"downloads/{title}.%(ext)s",
+                    "merge_output_format": "mp4",
+                }
+            elif songaudio:
+                fpath = f"downloads/{title}.mp3"
+                opts = {
+                    **common_opts,
+                    "format": "bestaudio[ext=m4a]/bestaudio/best",
+                    "outtmpl": f"downloads/{title}.%(ext)s",
+                    "postprocessors": [{
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    }]
+                }
+            else:
+                opts = {
+                    **common_opts,
+                    "format": "bestaudio/best",
+                    "outtmpl": "downloads/%(id)s.%(ext)s",
+                }
 
-        downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-        return downloaded_file, True
+            downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
+            return downloaded_file, True
+
+        except Exception as e:
+            logger.error(f"Download failed (1st try): {e}")
+            # Fallback — try very safe format
+            try:
+                opts["format"] = "18"  # 360p mp4 — almost never 403s
+                downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
+                logger.info("Fallback to format 18 succeeded")
+                return downloaded_file, True
+            except Exception as fb_e:
+                logger.error(f"Fallback also failed: {fb_e}")
+                return None, False
