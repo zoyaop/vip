@@ -82,6 +82,7 @@ class YouTubeAPI:
         else:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
+
         while True:
             yt = get_youtube_client()
             if not yt: return None
@@ -90,8 +91,10 @@ class YouTubeAPI:
                     srch = await asyncio.to_thread(yt.search().list(q=link, part="id", maxResults=1, type="video").execute)
                     if not srch.get("items"): return None
                     vidid = srch["items"][0]["id"]["videoId"]
+
                 data = await asyncio.to_thread(yt.videos().list(part="snippet,contentDetails", id=vidid).execute)
                 if not data.get("items"): return None
+
                 item = data["items"][0]
                 title = item["snippet"]["title"]
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
@@ -101,30 +104,22 @@ class YouTubeAPI:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
 
-    async def track(self, link: str, videoid: Union[bool, str] = None):
-        res = await self.details(link, videoid)
-        if not res: return None, None
-        title, d_min, _, thumb, vidid = res
-        return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
-
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> tuple:
-        # Step 1: Unique Video ID nikalna
+        # Video ID nikalna zaroori hai unique file ke liye
         if not videoid:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
-            videoid = match.group(1) if match else "temp_" + str(random.randint(1000, 9999))
+            videoid = match.group(1) if match else str(random.randint(1000, 9999))
         
         link = self.base + videoid
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
 
         # Filenames ko unique banaya gaya hai (Using videoid)
-        # Isse do users ke songs aapas mein nahi takrayenge
         temp_video_file = f"downloads/temp_{videoid}.mp4"
         final_mp3 = f"downloads/{videoid}.mp3"
 
-        # Agar song pehle se download ho chuka hai, to direct return karo (Fast Queue)
+        # Agar song pehle se download hai, to seedha wahi return karo (Saves Time)
         if os.path.exists(final_mp3):
-            logger.info(f"Song already exists: {final_mp3}")
             return final_mp3, True
 
         common_opts = {
@@ -134,8 +129,19 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "continuedl": True,
             "retries": 10,
-            "extractor_args": {"youtube": {"player_client": ["android", "web", "ios"]}},
+            "extractor_args": {"youtube": {"player_client": ["default", "ios", "web"]}},
+            "concurrent_fragment_downloads": 10,
         }
+
+        # aria2c check
+        try:
+            import subprocess
+            subprocess.run(["aria2c", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            common_opts["external_downloader"] = "aria2c"
+            common_opts["external_downloader_args"] = ["-x", "16", "-k", "1M", "-s", "16"]
+        except:
+            pass
+
         if cookie: common_opts["cookiefile"] = cookie
 
         def ytdl_run(opts):
@@ -152,7 +158,7 @@ class YouTubeAPI:
             }
             downloaded_temp = await loop.run_in_executor(None, lambda: ytdl_run(video_opts))
 
-            # Step 2: FFmpeg Convert (Purana fast logic)
+            # Step 2: Video → MP3 convert
             ffmpeg_cmd = [
                 "ffmpeg", "-i", downloaded_temp,
                 "-vn", "-acodec", "libmp3lame", "-q:a", "2",
@@ -161,7 +167,6 @@ class YouTubeAPI:
             proc = await asyncio.create_subprocess_exec(*ffmpeg_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             await proc.communicate()
 
-            # Temp file delete karna zaroori hai
             if os.path.exists(downloaded_temp):
                 os.remove(downloaded_temp)
 
@@ -169,10 +174,36 @@ class YouTubeAPI:
 
         except Exception as e:
             logger.error(f"Download Error: {e}")
-            # Fallback direct audio download agar purana tarika fail ho
+            # Fallback direct audio way
             try:
-                opts = {**common_opts, "format": "bestaudio", "outtmpl": final_mp3, "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]}
-                res = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-                return res, True
+                opts = {
+                    **common_opts,
+                    "format": "bestaudio",
+                    "outtmpl": f"downloads/{videoid}.%(ext)s",
+                    "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
+                }
+                downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
+                return downloaded_file, True
             except:
                 return None, False
+
+    # ... Baki functions (playlist, slider, etc.) purane hi rahenge ...
+    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
+        if videoid: link = self.listbase + link
+        cookie = get_cookie_file()
+        cookie_arg = f"--cookies {cookie}" if cookie else ""
+        cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
+        proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate()
+        return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
+
+    async def video(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        cookie = get_cookie_file()
+        opts = ["yt-dlp", "-g", "-f", "best[height<=?720]", "--geo-bypass", link]
+        if cookie: opts.extend(["--cookies", cookie])
+        proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate()
+        if stdout:
+            return 1, stdout.decode().split("\n")[0].strip()
+        return 0, None
