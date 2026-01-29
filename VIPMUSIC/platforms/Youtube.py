@@ -17,17 +17,13 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
-# Downloads folder check
-if not os.path.exists("downloads"):
-    os.makedirs("downloads")
-
 # API keys rotation
 API_KEYS = [k.strip() for k in config.API_KEY.split(",") if k.strip()]
 current_key_index = 0
 
 def get_youtube_client():
     global current_key_index
-    if not API_KEYS or current_key_index >= len(API_KEYS):
+    if current_key_index >= len(API_KEYS):
         return None
     return build("youtube", "v3", developerKey=API_KEYS[current_key_index], static_discovery=False)
 
@@ -42,9 +38,9 @@ def switch_key():
 
 def get_cookie_file():
     try:
-        folder = os.path.join(os.getcwd(), "cookies")
+        folder = f"{os.getcwd()}/cookies"
         if not os.path.exists(folder):
-            return None
+            os.makedirs(folder)
         txt_files = glob.glob(os.path.join(folder, '*.txt'))
         if not txt_files:
             return None
@@ -113,7 +109,6 @@ class YouTubeAPI:
                 return title, d_min, d_sec, thumb, vidid
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
-                logger.error(f"API error: {e}")
                 return None
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
@@ -123,116 +118,59 @@ class YouTubeAPI:
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> tuple:
-        """
-        Direct high-speed Audio downloader with MP3 conversion
-        """
-        if videoid: link = self.base + link
+        if videoid: 
+            link = self.base + videoid
+        else:
+            # Link se ID nikalna zaroori hai unique filename ke liye
+            match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
+            videoid = match.group(1) if match else str(random.randint(10000, 99999))
+
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
         
-        # File name sanitize (remove special characters)
-        clean_title = re.sub(r'[^\w\s-]', '', title).strip() if title else "song"
-        final_path = f"downloads/{clean_title}"
+        # Unique Filenames using videoid to prevent overwriting
+        save_path = f"downloads/{videoid}"
+        mp3_file = f"{save_path}.mp3"
+        
+        # Agar file pehle se downloaded hai to wahi return karo (Fast Queueing)
+        if os.path.exists(mp3_file):
+            return mp3_file, True
 
         common_opts = {
             "quiet": True,
             "no_warnings": True,
             "geo_bypass": True,
             "nocheckcertificate": True,
-            "continuedl": True,
-            "retries": 15,
-            "fragment_retries": 10,
-            # Best way to bypass 403 in 2025/26
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "web"],
-                    "player_skip": ["webpage", "configs"],
-                }
-            },
-            "concurrent_fragment_downloads": 10,
+            "retries": 10,
+            "extractor_args": {"youtube": {"player_client": ["android", "web", "ios"]}},
         }
+        if cookie: common_opts["cookiefile"] = cookie
 
-        # Use aria2c for 10x faster speed if installed
-        try:
-            import subprocess
-            subprocess.run(["aria2c", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            common_opts["external_downloader"] = "aria2c"
-            common_opts["external_downloader_args"] = ["-x", "16", "-s", "16", "-k", "1M"]
-            logger.info("Aria2c detected: Super fast download enabled.")
-        except:
-            pass
-
-        if cookie:
-            common_opts["cookiefile"] = cookie
-
-        ytdl_opts = {
-            **common_opts,
-            "format": "bestaudio/best",
-            "outtmpl": f"{final_path}.%(ext)s",
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }],
-        }
+        def ytdl_run(opts):
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=True)
+                return ydl.prepare_filename(info)
 
         try:
-            def ytdl_run():
-                with yt_dlp.YoutubeDL(ytdl_opts) as ydl:
-                    info = ydl.extract_info(link, download=True)
-                    return ydl.prepare_filename(info).rsplit('.', 1)[0] + ".mp3"
-
-            downloaded_file = await loop.run_in_executor(None, ytdl_run)
+            # Optimized direct audio download (Faster & Stable)
+            audio_opts = {
+                **common_opts,
+                "format": "bestaudio/best",
+                "outtmpl": save_path + ".%(ext)s",
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }],
+            }
+            
+            downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(audio_opts))
+            # yt-dlp might append .mp3 after post-processing
+            if not downloaded_file.endswith(".mp3"):
+                downloaded_file = mp3_file
+                
             return downloaded_file, True
 
         except Exception as e:
-            logger.error(f"Download Error: {str(e)}")
-            # Fallback for 403 or format issues
-            try:
-                ytdl_opts["format"] = "140/bestaudio"
-                downloaded_file = await loop.run_in_executor(None, ytdl_run)
-                return downloaded_file, True
-            except:
-                return None, False
-
-    async def video(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: link = self.base + link
-        cookie = get_cookie_file()
-        opts = ["yt-dlp", "-g", "-f", "best[height<=?720]", "--geo-bypass", link]
-        if cookie: opts.extend(["--cookies", cookie])
-
-        proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await proc.communicate()
-        if stdout:
-            return 1, stdout.decode().split("\n")[0].strip()
-        return 0, None
-
-    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
-        if videoid: link = self.listbase + link
-        cookie = get_cookie_file()
-        cookie_arg = f"--cookies {cookie}" if cookie else ""
-        cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
-        proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, _ = await proc.communicate()
-        return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
-
-    async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
-        while True:
-            yt = get_youtube_client()
-            if not yt: return None
-            try:
-                srch = await asyncio.to_thread(yt.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not srch.get("items"): return None
-
-                item = srch["items"][query_type]
-                vidid = item["id"]["videoId"]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-
-                vres = await asyncio.to_thread(yt.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(vres["items"][0]["contentDetails"]["duration"])
-                return title, d_min, thumb, vidid
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
-                logger.error(f"Slider error: {e}")
-                return None
+            logger.error(f"Download Error: {e}")
+            return None, False
