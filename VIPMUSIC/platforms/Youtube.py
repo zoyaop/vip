@@ -1,16 +1,14 @@
 import asyncio
 import glob
-import json
 import os
 import random
 import re
 from typing import Union
 
+import aiohttp
 import yt_dlp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from googleapiclient.discovery import build 
-from googleapiclient.errors import HttpError
 
 import config
 from VIPMUSIC import LOGGER
@@ -18,46 +16,39 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
-# --- STRONG API ROTATION LOGIC ---
-API_KEYS = [k.strip() for k in config.API_KEY.split(",") if k.strip()]
+# --- API KEY ROTATION LOGIC ---
+# Config se keys ko list mein convert karein
+API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
 current_key_index = 0
-
-def get_youtube_client():
-    global current_key_index
-    if not API_KEYS or current_key_index >= len(API_KEYS):
-        return None
-    try:
-        return build("youtube", "v3", developerKey=API_KEYS[current_key_index], static_discovery=False)
-    except Exception as e:
-        logger.error(f"Build Error (Key {current_key_index + 1}): {e}")
-        if switch_key():
-            return get_youtube_client()
-        return None
 
 def switch_key():
     global current_key_index
     current_key_index += 1
     if current_key_index < len(API_KEYS):
-        logger.warning(f"⚠️ YouTube API Switched to Key #{current_key_index + 1}")
+        logger.warning(f"YouTube Quota Finished. Switching to Key #{current_key_index + 1}")
         return True
+    logger.error("All YouTube API Keys are exhausted!")
     return False
 
 def get_cookie_file():
     try:
-        folder_path = f"{os.getcwd()}/cookies"
+        folder_path = os.path.join(os.getcwd(), "cookies")
         txt_files = glob.glob(os.path.join(folder_path, '*.txt'))
         return random.choice(txt_files) if txt_files else None
-    except:
+    except Exception:
         return None
 
 class YouTubeAPI:
     def __init__(self):
+        # Base URLs for API and Watch links
+        self.search_api_url = "https://www.googleapis.com/youtube/v3/search"
+        self.video_api_url = "https://www.googleapis.com/youtube/v3/videos"
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
 
     def parse_duration(self, duration):
-        """ISO 8601 duration conversion"""
+        """ISO 8601 duration string conversion (e.g., PT5M30S -> 05:30)"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
         hours = int(match.group(1) or 0)
         minutes = int(match.group(2) or 0)
@@ -66,12 +57,35 @@ class YouTubeAPI:
         duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
         return duration_str, total_seconds
 
+    async def fetch_http(self, url, params):
+        """Helper to make HTTP GET requests with API rotation"""
+        global current_key_index
+        while current_key_index < len(API_KEYS):
+            params["key"] = API_KEYS[current_key_index]
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params) as response:
+                        if response.status == 200:
+                            return await response.json()
+                        
+                        # Check for Quota Exceeded (403) or Invalid Key (400)
+                        if response.status in [403, 400, 429]:
+                            if not switch_key():
+                                return None
+                            continue # Try next key
+                        else:
+                            logger.error(f"YouTube API Error: {response.status}")
+                            return None
+            except Exception as e:
+                logger.error(f"HTTP Request failed: {e}")
+                return None
+        return None
+
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         return bool(re.search(self.regex, link))
 
     async def url(self, message: Message) -> Union[str, None]:
-        """Extraxt URL from message or reply (Fixed AttributeError)"""
         messages = [message]
         if message.reply_to_message:
             messages.append(message.reply_to_message)
@@ -86,23 +100,6 @@ class YouTubeAPI:
                         return entity.url
         return None
 
-    async def fetch_yt_dlp_info(self, query):
-        """API Fail hone par Fallback search logic"""
-        logger.info(f"Using yt-dlp fallback for: {query}")
-        opts = {"quiet": True, "extract_flat": True, "skip_download": True}
-        cookie = get_cookie_file()
-        if cookie: opts["cookiefile"] = cookie
-        
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            try:
-                info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{query}", download=False)
-                if not info or not info.get('entries'): return None
-                video = info['entries'][0]
-                return video.get('title'), "00:00", 0, video.get('thumbnails')[0]['url'], video.get('id')
-            except Exception as e:
-                logger.error(f"yt-dlp Fallback Failed: {e}")
-                return None
-
     async def details(self, link: str, videoid: Union[bool, str] = None):
         if videoid: 
             vidid = link
@@ -110,32 +107,25 @@ class YouTubeAPI:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
 
-        while True:
-            youtube = get_youtube_client()
-            if not youtube:
-                return await self.fetch_yt_dlp_info(link)
+        # 1. Agar ID nahi mili toh Search API use karein
+        if not vidid:
+            search_params = {"q": link, "part": "id", "maxResults": 1, "type": "video"}
+            search_data = await self.fetch_http(self.search_api_url, search_params)
+            if not search_data or not search_data.get("items"):
+                return None
+            vidid = search_data["items"][0]["id"]["videoId"]
 
-            try:
-                if not vidid:
-                    search = await asyncio.to_thread(youtube.search().list(q=link, part="id", maxResults=1, type="video").execute)
-                    if not search.get("items"): return None
-                    vidid = search["items"][0]["id"]["videoId"]
-                
-                video_data = await asyncio.to_thread(youtube.videos().list(part="snippet,contentDetails", id=vidid).execute)
-                if not video_data.get("items"): return None
-                
-                item = video_data["items"][0]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
-                return title, d_min, d_sec, thumb, vidid
+        # 2. Video API se snippet aur duration nikalein
+        video_params = {"id": vidid, "part": "snippet,contentDetails"}
+        video_data = await self.fetch_http(self.video_api_url, video_params)
+        if not video_data or not video_data.get("items"):
+            return None
 
-            except HttpError as e:
-                if e.resp.status in [403, 400, 429] and switch_key():
-                    continue
-                return await self.fetch_yt_dlp_info(link)
-            except Exception:
-                return await self.fetch_yt_dlp_info(link)
+        item = video_data["items"][0]
+        title = item["snippet"]["title"]
+        thumb = item["snippet"]["thumbnails"]["high"]["url"]
+        d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
+        return title, d_min, d_sec, thumb, vidid
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
         res = await self.details(link, videoid)
@@ -163,43 +153,59 @@ class YouTubeAPI:
         return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
-            try:
-                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not search.get("items"): return None
-                
-                item = search["items"][query_type]
-                vidid = item["id"]["videoId"]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                
-                v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
-                return title, d_min, thumb, vidid
-            except HttpError:
-                if switch_key(): continue
-                return None
+        # Search API call for top 10 results
+        search_params = {"q": link, "part": "snippet", "maxResults": 10, "type": "video"}
+        search_data = await self.fetch_http(self.search_api_url, search_params)
+        if not search_data or not search_data.get("items"):
+            return None
+        
+        item = search_data["items"][query_type]
+        vidid = item["id"]["videoId"]
+        title = item["snippet"]["title"]
+        thumb = item["snippet"]["thumbnails"]["high"]["url"]
+        
+        # Duration ke liye Videos API
+        v_params = {"id": vidid, "part": "contentDetails"}
+        v_data = await self.fetch_http(self.video_api_url, v_params)
+        d_min, _ = self.parse_duration(v_data["items"][0]["contentDetails"]["duration"])
+        return title, d_min, thumb, vidid
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
         loop = asyncio.get_running_loop()
         cookie = get_cookie_file()
-        common_opts = {"quiet": True, "no_warnings": True, "geo_bypass": True, "nocheckcertificate": True}
+        
+        # Clean Title for Filename
+        safe_title = re.sub(r'[^\w\-_\. ]', '_', title) if title else "track"
+        
+        common_opts = {
+            "quiet": True, "no_warnings": True, "geo_bypass": True, 
+            "nocheckcertificate": True, "outtmpl": f"downloads/{safe_title}.%(ext)s"
+        }
         if cookie: common_opts["cookiefile"] = cookie
 
-        def ytdl_run(opts):
-            with yt_dlp.YoutubeDL(opts) as ydl:
+        if songvideo:
+            common_opts["format"] = f"{format_id}+140/bestvideo+bestaudio"
+            common_opts["merge_output_format"] = "mp4"
+        elif songaudio:
+            common_opts["format"] = "bestaudio/best"
+            common_opts["postprocessors"] = [{
+                "key": "FFmpegExtractAudio", 
+                "preferredcodec": "mp3", 
+                "preferredquality": "192"
+            }]
+        else:
+            common_opts["format"] = "bestaudio/best"
+            common_opts["outtmpl"] = "downloads/%(id)s.%(ext)s"
+
+        def ytdl_run():
+            with yt_dlp.YoutubeDL(common_opts) as ydl:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
-        if songvideo:
-            opts = {**common_opts, "format": f"{format_id}+140/bestvideo+bestaudio", "outtmpl": f"downloads/{title}.%(ext)s", "merge_output_format": "mp4"}
-        elif songaudio:
-            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]}
-        else:
-            opts = {**common_opts, "format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"}
-
-        downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-        return downloaded_file, True
+        try:
+            downloaded_file = await loop.run_in_executor(None, ytdl_run)
+            return downloaded_file, True
+        except Exception as e:
+            logger.error(f"Download Error: {e}")
+            return str(e), False
