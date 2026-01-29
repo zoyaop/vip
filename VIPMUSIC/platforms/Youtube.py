@@ -19,7 +19,7 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 logger = LOGGER(__name__)
 
 # --- GOOGLE API SEQUENTIAL ROTATION ---
-API_KEYS = [k.strip() for k in API_KEY.split(",")]
+API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
 current_key_index = 0
 
 def get_youtube_client():
