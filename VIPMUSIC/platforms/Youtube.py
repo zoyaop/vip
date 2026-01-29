@@ -1,6 +1,5 @@
 import asyncio
 import glob
-import json
 import os
 import random
 import re
@@ -9,7 +8,7 @@ from typing import Union
 import yt_dlp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from googleapiclient.discovery import build 
+from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 import config
@@ -18,7 +17,7 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
-# --- API SEQUENTIAL ROTATION LOGIC ---
+# API keys rotation
 API_KEYS = [k.strip() for k in config.API_KEY.split(",") if k.strip()]
 current_key_index = 0
 
@@ -32,24 +31,24 @@ def switch_key():
     global current_key_index
     current_key_index += 1
     if current_key_index < len(API_KEYS):
-        logger.warning(f"YouTube Quota Finished. Switching to Key #{current_key_index + 1}")
+        logger.warning(f"Quota khatam! Key #{current_key_index + 1} pe switch kar raha hoon")
         return True
-    logger.error("All YouTube API Keys are exhausted!")
+    logger.error("Saare YouTube API keys khatam ho gaye!")
     return False
 
-# --- COOKIE LOGIC ---
+# Cookies logic
 def get_cookie_file():
     try:
-        folder_path = f"{os.getcwd()}/cookies"
-        txt_files = glob.glob(os.path.join(folder_path, '*.txt'))
+        folder = f"{os.getcwd()}/cookies"
+        txt_files = glob.glob(os.path.join(folder, '*.txt'))
         if not txt_files:
-            logger.warning("No cookie files found in /cookies folder")
+            logger.warning("Cookies folder mein koi .txt file nahi mila → fresh cookies daalo for better success")
             return None
-        cookie_file = random.choice(txt_files)
-        logger.info(f"Selected cookie file: {os.path.basename(cookie_file)}")
-        return cookie_file
+        cookie = random.choice(txt_files)
+        logger.info(f"Cookie use kar raha: {os.path.basename(cookie)}")
+        return cookie
     except Exception as e:
-        logger.error(f"Error loading cookie: {e}")
+        logger.error(f"Cookie load error: {e}")
         return None
 
 class YouTubeAPI:
@@ -59,68 +58,66 @@ class YouTubeAPI:
         self.listbase = "https://youtube.com/playlist?list="
 
     def parse_duration(self, duration):
-        """ISO 8601 duration conversion"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
-        hours = int(match.group(1) or 0)
-        minutes = int(match.group(2) or 0)
-        seconds = int(match.group(3) or 0)
-        total_seconds = hours * 3600 + minutes * 60 + seconds
-        duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
-        return duration_str, total_seconds
+        h = int(match.group(1) or 0)
+        m = int(match.group(2) or 0)
+        s = int(match.group(3) or 0)
+        total_sec = h * 3600 + m * 60 + s
+        dur_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+        return dur_str, total_sec
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         return bool(re.search(self.regex, link))
 
     async def url(self, message: Message) -> Union[str, None]:
-        messages = [message]
+        msgs = [message]
         if message.reply_to_message:
-            messages.append(message.reply_to_message)
-        for msg in messages:
+            msgs.append(message.reply_to_message)
+        for msg in msgs:
             if msg.entities:
-                for entity in msg.entities:
-                    if entity.type == MessageEntityType.URL:
-                        return (msg.text or msg.caption)[entity.offset : entity.offset + entity.length]
+                for ent in msg.entities:
+                    if ent.type == MessageEntityType.URL:
+                        return (msg.text or msg.caption)[ent.offset:ent.offset + ent.length]
             if msg.caption_entities:
-                for entity in msg.caption_entities:
-                    if entity.type == MessageEntityType.TEXT_LINK:
-                        return entity.url
+                for ent in msg.caption_entities:
+                    if ent.type == MessageEntityType.TEXT_LINK:
+                        return ent.url
         return None
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: 
+        if videoid:
             vidid = link
         else:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
 
         while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
+            yt = get_youtube_client()
+            if not yt: return None
             try:
                 if not vidid:
-                    search = await asyncio.to_thread(youtube.search().list(q=link, part="id", maxResults=1, type="video").execute)
-                    if not search.get("items"): return None
-                    vidid = search["items"][0]["id"]["videoId"]
-                
-                video_data = await asyncio.to_thread(youtube.videos().list(part="snippet,contentDetails", id=vidid).execute)
-                if not video_data.get("items"): return None
-                
-                item = video_data["items"][0]
+                    srch = await asyncio.to_thread(yt.search().list(q=link, part="id", maxResults=1, type="video").execute)
+                    if not srch.get("items"): return None
+                    vidid = srch["items"][0]["id"]["videoId"]
+
+                data = await asyncio.to_thread(yt.videos().list(part="snippet,contentDetails", id=vidid).execute)
+                if not data.get("items"): return None
+
+                item = data["items"][0]
                 title = item["snippet"]["title"]
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
                 d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
                 return title, d_min, d_sec, thumb, vidid
-
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
-                logger.error(f"YouTube API error: {e}")
+                logger.error(f"API error: {e}")
                 return None
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
         res = await self.details(link, videoid)
         if not res: return None, None
-        title, d_min, d_sec, thumb, vidid = res
+        title, d_min, _, thumb, vidid = res
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
@@ -128,12 +125,12 @@ class YouTubeAPI:
         cookie = get_cookie_file()
         opts = ["yt-dlp", "-g", "-f", "best[height<=?720]", "--geo-bypass", link]
         if cookie: opts.extend(["--cookies", cookie])
-        
+
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate()
         if stdout:
             return 1, stdout.decode().split("\n")[0].strip()
-        logger.error(f"yt-dlp video url fetch error: {stderr.decode()}")
+        logger.error(f"Video URL fetch fail: {stderr.decode()}")
         return 0, None
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
@@ -141,30 +138,29 @@ class YouTubeAPI:
         cookie = get_cookie_file()
         cookie_arg = f"--cookies {cookie}" if cookie else ""
         cmd = f"yt-dlp {cookie_arg} -i --get-id --flat-playlist --playlist-end {limit} --skip-download {link}"
-        playlist_proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, _ = await playlist_proc.communicate()
-        ids = [k.strip() for k in stdout.decode().split("\n") if k.strip()]
-        return ids
+        proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate()
+        return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
         while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
+            yt = get_youtube_client()
+            if not yt: return None
             try:
-                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not search.get("items"): return None
-                
-                item = search["items"][query_type]
+                srch = await asyncio.to_thread(yt.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
+                if not srch.get("items"): return None
+
+                item = srch["items"][query_type]
                 vidid = item["id"]["videoId"]
                 title = item["snippet"]["title"]
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                
-                v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
+
+                vres = await asyncio.to_thread(yt.videos().list(part="contentDetails", id=vidid).execute)
+                d_min, _ = self.parse_duration(vres["items"][0]["contentDetails"]["duration"])
                 return title, d_min, thumb, vidid
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
-                logger.error(f"Slider API error: {e}")
+                logger.error(f"Slider error: {e}")
                 return None
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> tuple:
@@ -178,11 +174,18 @@ class YouTubeAPI:
             "geo_bypass": True,
             "nocheckcertificate": True,
             "continuedl": True,
-            "retries": 10,
-            # 2026 fixes — very important
-            "impersonate": "chrome",                    # or "chrome:windows"
-            "extractor_args": {"youtube": {"player_client": ["default", "ios", "web"], "-android_sdkless": None}},
+            "retries": 15,
+            "fragment_retries": 10,
         }
+
+        # Impersonate optional – agar curl_cffi installed hai to use karo
+        try:
+            import curl_cffi
+            common_opts["impersonate"] = "chrome"  # auto latest version lega
+            logger.info("curl_cffi detected → impersonate 'chrome' enabled")
+        except ImportError:
+            logger.warning("curl_cffi not found → impersonate skipped (install 'yt-dlp[default,curl-cffi]' to enable)")
+
         if cookie:
             common_opts["cookiefile"] = cookie
 
@@ -191,17 +194,19 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=True)
                 return ydl.prepare_filename(info)
 
+        downloaded_file = None
+        success = False
+
+        # Try 1: Normal attempt with safe format (prefer combined to avoid 403)
         try:
             if songvideo:
-                fpath = f"downloads/{title}.mp4"
                 opts = {
                     **common_opts,
-                    "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best",
+                    "format": "best[ext=mp4][height<=720]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best",
                     "outtmpl": f"downloads/{title}.%(ext)s",
                     "merge_output_format": "mp4",
                 }
             elif songaudio:
-                fpath = f"downloads/{title}.mp3"
                 opts = {
                     **common_opts,
                     "format": "bestaudio[ext=m4a]/bestaudio/best",
@@ -215,21 +220,34 @@ class YouTubeAPI:
             else:
                 opts = {
                     **common_opts,
-                    "format": "bestaudio/best",
+                    "format": "best",
                     "outtmpl": "downloads/%(id)s.%(ext)s",
                 }
 
             downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-            return downloaded_file, True
+            success = True
+            logger.info(f"Download successful: {downloaded_file}")
 
         except Exception as e:
-            logger.error(f"Download failed (1st try): {e}")
-            # Fallback — try very safe format
+            logger.error(f"Primary download failed: {str(e)}")
+
+        # Try 2: Super safe fallback (format 18 = 360p mp4, almost never 403)
+        if not success:
             try:
-                opts["format"] = "18"  # 360p mp4 — almost never 403s
+                opts = {
+                    **common_opts,
+                    "format": "18",  # 360p mp4 – very stable in 2026
+                    "outtmpl": f"downloads/{title or '%(id)s'}.%(ext)s",
+                }
+                # Remove merge/postprocessor as not needed
+                opts.pop("merge_output_format", None)
+                if "postprocessors" in opts:
+                    del opts["postprocessors"]
+
                 downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(opts))
-                logger.info("Fallback to format 18 succeeded")
-                return downloaded_file, True
+                success = True
+                logger.info(f"Fallback to format 18 successful: {downloaded_file}")
             except Exception as fb_e:
-                logger.error(f"Fallback also failed: {fb_e}")
-                return None, False
+                logger.error(f"Fallback failed too: {str(fb_e)}")
+
+        return downloaded_file, success
