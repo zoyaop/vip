@@ -55,16 +55,12 @@ class YouTubeAPI:
         self.listbase = "https://youtube.com/playlist?list="
 
     def parse_duration(self, duration):
-        """ISO 8601 duration format (PT1M30S) ko seconds aur string mein badalta hai"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
         hours = int(match.group(1) or 0)
         minutes = int(match.group(2) or 0)
         seconds = int(match.group(3) or 0)
         total_seconds = hours * 3600 + minutes * 60 + seconds
-        if hours > 0:
-            duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        else:
-            duration_str = f"{minutes:02d}:{seconds:02d}"
+        duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
         return duration_str, total_seconds
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
@@ -110,7 +106,6 @@ class YouTubeAPI:
                 thumb = item["snippet"]["thumbnails"]["high"]["url"]
                 d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
                 return title, d_min, d_sec, thumb, vidid
-
             except HttpError as e:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
@@ -122,10 +117,17 @@ class YouTubeAPI:
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
-        """Direct Streaming Link nikalne ke liye (binat download kiye)"""
+        """Direct HTTP Link nikalne ke liye (For Streaming)"""
         if videoid: link = self.base + link
         cookie = get_cookie_file()
-        opts = ["yt-dlp", "-g", "-f", "best[height<=?720]", "--geo-bypass", link]
+        
+        # Modern headers to prevent 403/Forbidden errors
+        opts = [
+            "yt-dlp", "-g", "-f", "best[height<=?720]", 
+            "--geo-bypass", 
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            link
+        ]
         if cookie: opts.extend(["--cookies", cookie])
         
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
@@ -133,7 +135,61 @@ class YouTubeAPI:
         if stdout:
             return 1, stdout.decode().split("\n")[0]
         else:
+            logger.error(f"Streaming link error: {stderr.decode()}")
             return 0, stderr.decode()
+
+    async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> Union[str, None]:
+        """File download karne ke liye (Audio/Video)"""
+        if videoid: link = self.base + link
+        loop = asyncio.get_running_loop()
+        cookie = get_cookie_file()
+        
+        if not os.path.exists("downloads"):
+            os.makedirs("downloads")
+
+        # Anti-Bot Options
+        common_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "nocheckcertificate": True,
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "referer": "https://www.google.com/",
+            "outtmpl": "downloads/%(title)s.%(ext)s",
+            "retries": 5
+        }
+        if cookie: common_opts["cookiefile"] = cookie
+
+        if songvideo:
+            common_opts["format"] = f"{format_id}+140/bestvideo+bestaudio"
+            common_opts["merge_output_format"] = "mp4"
+        elif songaudio:
+            common_opts["format"] = "bestaudio/best"
+            common_opts["postprocessors"] = [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }]
+        else:
+            common_opts["format"] = "bestaudio/best"
+
+        def ytdl_run(opts):
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(link, download=True)
+                    return ydl.prepare_filename(info)
+            except Exception as e:
+                logger.error(f"yt-dlp error: {str(e)}")
+                return None
+
+        file_path = await loop.run_in_executor(None, lambda: ytdl_run(common_opts))
+        
+        if file_path and songaudio:
+            # yt-dlp might still return .webm/m4a in filename even after conversion
+            base, _ = os.path.splitext(file_path)
+            if os.path.exists(base + ".mp3"):
+                return base + ".mp3"
+        return file_path
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid: link = self.listbase + link
@@ -143,73 +199,3 @@ class YouTubeAPI:
         playlist = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, _ = await playlist.communicate()
         return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
-
-    async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
-            try:
-                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not search.get("items"): return None
-                
-                item = search["items"][query_type]
-                vidid = item["id"]["videoId"]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                
-                v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
-                return title, d_min, thumb, vidid
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
-                return None
-
-    async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
-        """File ko storage mein download karne ke liye"""
-        if videoid: link = self.base + link
-        loop = asyncio.get_running_loop()
-        cookie = get_cookie_file()
-        
-        # Output directory check
-        if not os.path.exists("downloads"):
-            os.makedirs("downloads")
-
-        common_opts = {
-            "quiet": True, 
-            "no_warnings": True, 
-            "geo_bypass": True, 
-            "nocheckcertificate": True,
-            "outtmpl": "downloads/%(title)s.%(ext)s"
-        }
-        if cookie: common_opts["cookiefile"] = cookie
-
-        if songvideo:
-            # Video Download logic
-            common_opts["format"] = f"{format_id}+140/bestvideo+bestaudio"
-            common_opts["merge_output_format"] = "mp4"
-        elif songaudio:
-            # Audio Download logic
-            common_opts["format"] = "bestaudio/best"
-            common_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio", 
-                "preferredcodec": "mp3", 
-                "preferredquality": "192"
-            }]
-        else:
-            # Default fallback
-            common_opts["format"] = "bestaudio/best"
-
-        def ytdl_run(opts):
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(link, download=True)
-                return ydl.prepare_filename(info)
-
-        try:
-            downloaded_file = await loop.run_in_executor(None, lambda: ytdl_run(common_opts))
-            # Agar audio convert hua hai to ext change ho sakti hai
-            if songaudio and downloaded_file.endswith((".webm", ".m4a")):
-                downloaded_file = os.path.splitext(downloaded_file)[0] + ".mp3"
-            return downloaded_file
-        except Exception as e:
-            logger.error(f"Download Error: {str(e)}")
-            return None
