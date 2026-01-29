@@ -10,8 +10,6 @@ import yt_dlp
 import aiohttp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from googleapiclient.discovery import build 
-from googleapiclient.errors import HttpError
 
 import config
 from VIPMUSIC import LOGGER
@@ -19,15 +17,16 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 
 logger = LOGGER(__name__)
 
-# --- API SEQUENTIAL ROTATION LOGIC ---
+# --- API KEY ROTATION ---
 API_KEYS = [k.strip() for k in config.API_KEY.split(",")]
 current_key_index = 0
 
-def get_youtube_client():
+def get_next_key():
     global current_key_index
-    if current_key_index >= len(API_KEYS):
-        return None
-    return build("youtube", "v3", developerKey=API_KEYS[current_key_index], static_discovery=False)
+    if current_key_index < len(API_KEYS):
+        key = API_KEYS[current_key_index]
+        return key
+    return None
 
 def switch_key():
     global current_key_index
@@ -38,15 +37,14 @@ def switch_key():
     logger.error("All YouTube API Keys are exhausted!")
     return False
 
-# --- COOKIE LOGIC (As per your file) ---
+# --- COOKIE LOGIC ---
 def get_cookie_file():
     try:
         folder_path = f"{os.getcwd()}/cookies"
         txt_files = glob.glob(os.path.join(folder_path, '*.txt'))
         if not txt_files:
             return None
-        cookie_file = random.choice(txt_files)
-        return cookie_file
+        return random.choice(txt_files)
     except Exception:
         return None
 
@@ -55,9 +53,9 @@ class YouTubeAPI:
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
+        self.api_url = "https://www.googleapis.com/youtube/v3"
 
     def parse_duration(self, duration):
-        """ISO 8601 duration conversion"""
         match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
         hours = int(match.group(1) or 0)
         minutes = int(match.group(2) or 0)
@@ -92,27 +90,36 @@ class YouTubeAPI:
             match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", link)
             vidid = match.group(1) if match else None
 
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
-            try:
+        async with aiohttp.ClientSession() as session:
+            while True:
+                key = get_next_key()
+                if not key: return None
+                
+                # Search if Video ID not found
                 if not vidid:
-                    search = await asyncio.to_thread(youtube.search().list(q=link, part="id", maxResults=1, type="video").execute)
-                    if not search.get("items"): return None
-                    vidid = search["items"][0]["id"]["videoId"]
-                
-                video_data = await asyncio.to_thread(youtube.videos().list(part="snippet,contentDetails", id=vidid).execute)
-                if not video_data.get("items"): return None
-                
-                item = video_data["items"][0]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
-                return title, d_min, d_sec, thumb, vidid
+                    search_url = f"{self.api_url}/search?part=id&q={link}&maxResults=1&type=video&key={key}"
+                    async with session.get(search_url) as resp:
+                        data = await resp.json()
+                        if "error" in data:
+                            if data["error"]["code"] == 403 and switch_key(): continue
+                            return None
+                        if not data.get("items"): return None
+                        vidid = data["items"][0]["id"]["videoId"]
 
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
-                return None
+                # Get Video Details
+                video_url = f"{self.api_url}/videos?part=snippet,contentDetails&id={vidid}&key={key}"
+                async with session.get(video_url) as resp:
+                    data = await resp.json()
+                    if "error" in data:
+                        if data["error"]["code"] == 403 and switch_key(): continue
+                        return None
+                    if not data.get("items"): return None
+                    
+                    item = data["items"][0]
+                    title = item["snippet"]["title"]
+                    thumb = item["snippet"]["thumbnails"]["high"]["url"]
+                    d_min, d_sec = self.parse_duration(item["contentDetails"]["duration"])
+                    return title, d_min, d_sec, thumb, vidid
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
         res = await self.details(link, videoid)
@@ -140,25 +147,30 @@ class YouTubeAPI:
         return [k.strip() for k in stdout.decode().split("\n") if k.strip()]
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
-        while True:
-            youtube = get_youtube_client()
-            if not youtube: return None
-            try:
-                search = await asyncio.to_thread(youtube.search().list(q=link, part="snippet", maxResults=10, type="video").execute)
-                if not search.get("items"): return None
+        async with aiohttp.ClientSession() as session:
+            while True:
+                key = get_next_key()
+                if not key: return None
                 
-                # Filter Logic (You can add duration filters here if needed)
-                item = search["items"][query_type]
-                vidid = item["id"]["videoId"]
-                title = item["snippet"]["title"]
-                thumb = item["snippet"]["thumbnails"]["high"]["url"]
-                
-                v_res = await asyncio.to_thread(youtube.videos().list(part="contentDetails", id=vidid).execute)
-                d_min, _ = self.parse_duration(v_res["items"][0]["contentDetails"]["duration"])
-                return title, d_min, thumb, vidid
-            except HttpError as e:
-                if e.resp.status == 403 and switch_key(): continue
-                return None
+                search_url = f"{self.api_url}/search?part=snippet&q={link}&maxResults=10&type=video&key={key}"
+                async with session.get(search_url) as resp:
+                    data = await resp.json()
+                    if "error" in data:
+                        if data["error"]["code"] == 403 and switch_key(): continue
+                        return None
+                    if not data.get("items"): return None
+                    
+                    item = data["items"][query_type]
+                    vidid = item["id"]["videoId"]
+                    title = item["snippet"]["title"]
+                    thumb = item["snippet"]["thumbnails"]["high"]["url"]
+                    
+                    # Get duration separately
+                    v_url = f"{self.api_url}/videos?part=contentDetails&id={vidid}&key={key}"
+                    async with session.get(v_url) as v_resp:
+                        v_data = await v_resp.json()
+                        d_min, _ = self.parse_duration(v_data["items"][0]["contentDetails"]["duration"])
+                        return title, d_min, thumb, vidid
 
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> str:
         if videoid: link = self.base + link
@@ -174,10 +186,8 @@ class YouTubeAPI:
                 return ydl.prepare_filename(info)
 
         if songvideo:
-            fpath = f"downloads/{title}.mp4"
             opts = {**common_opts, "format": f"{format_id}+140/bestvideo+bestaudio", "outtmpl": f"downloads/{title}.%(ext)s", "merge_output_format": "mp4"}
         elif songaudio:
-            fpath = f"downloads/{title}.mp3"
             opts = {**common_opts, "format": "bestaudio/best", "outtmpl": f"downloads/{title}.%(ext)s", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]}
         else:
             opts = {**common_opts, "format": "bestaudio/best", "outtmpl": "downloads/%(id)s.%(ext)s"}
