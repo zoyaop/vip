@@ -118,23 +118,47 @@ class YouTubeAPI:
         title, d_min, d_sec, thumb, vidid = res
         return {"title": title, "link": self.base + vidid, "vidid": vidid, "duration_min": d_min, "thumb": thumb}, vidid
 
+    # --- VIDEO STREAM LOGIC (Direct Streaming Links) ---
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         cookie = get_cookie_file()
-        # Added extra args to video streaming link fetcher to avoid 403
+        
+        # User agents and bypass for streaming link
         opts = [
             "yt-dlp", 
-            "-g", 
+            "-g", # Get URL
             "-f", "best[height<=?720]", 
             "--geo-bypass", 
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "--no-check-certificate",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
             link
         ]
         if cookie: opts.extend(["--cookies", cookie])
         
         proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate()
-        return (1, stdout.decode().split("\n")[0]) if stdout else (0, stderr.decode())
+        if stdout:
+            return (1, stdout.decode().split("\n")[0])
+        return (0, stderr.decode())
+
+    # --- AUDIO STREAM CONVERTER LOGIC ---
+    async def stream(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        cookie = get_cookie_file()
+        opts = [
+            "yt-dlp", 
+            "-g", 
+            "-f", "bestaudio", 
+            "--geo-bypass", 
+            link
+        ]
+        if cookie: opts.extend(["--cookies", cookie])
+        
+        proc = await asyncio.create_subprocess_exec(*opts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate()
+        if stdout:
+            return stdout.decode().split("\n")[0]
+        return None
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid: link = self.listbase + link
@@ -165,6 +189,7 @@ class YouTubeAPI:
                 if e.resp.status == 403 and switch_key(): continue
                 return None
 
+    # --- DOWNLOAD & CONVERT LOGIC ---
     async def download(self, link: str, mystic, video=None, videoid=None, songaudio=None, songvideo=None, format_id=None, title=None) -> Union[tuple, bool]:
         if videoid: 
             link = self.base + link
@@ -175,18 +200,17 @@ class YouTubeAPI:
         if not os.path.exists("downloads"):
             os.makedirs("downloads")
 
-        # 403 Forbidden Bypass Options
         common_opts = {
             "quiet": True,
             "no_warnings": True,
             "geo_bypass": True,
             "nocheckcertificate": True,
             "restrictfilenames": True,
-            "source_address": "0.0.0.0", # Force IPv4 to avoid VPS blocking
+            "source_address": "0.0.0.0", 
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "ios"], # Best bypass for 403
+                    "player_client": ["android", "ios"],
                     "skip": ["dash", "hls"]
                 }
             }
@@ -205,7 +229,7 @@ class YouTubeAPI:
                 return None
 
         if songvideo:
-            # High quality video merging
+            # Video Converter Logic
             f_id = f"{format_id}+140/bestvideo+bestaudio/best" if format_id else "bestvideo+bestaudio/best"
             opts = {
                 **common_opts,
@@ -214,6 +238,7 @@ class YouTubeAPI:
                 "merge_output_format": "mp4",
             }
         elif songaudio:
+            # Audio Converter Logic (MP3 192kbps)
             opts = {
                 **common_opts,
                 "format": "bestaudio/best",
