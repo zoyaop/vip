@@ -64,10 +64,10 @@ async def start_comm(client, message: Message, _):
     chat_id = message.chat.id
     await add_served_user(message.from_user.id)
     
-    # यूजर के मैसेज पर 0.5 सेकंड बाद रिएक्शन
+    # --- बहुत बड़ा 🕊️ Effect देने के लिए Animated Sticker ---
     try:
-        await asyncio.sleep(0.5)
-        await message.react("🕊️")
+        # यह एक उड़ते हुए कबूतर का एनिमेटेड स्टिकर है जो काफी बड़ा दिखता है
+        await message.reply_sticker("CAACAgIAAxkBAAEMks9mto_3Y_9_Wp_vS-8p-hYpAAGS7AAClAkAApsS6FUK9v9S9S9S9S4E")
     except:
         pass
 
@@ -83,10 +83,6 @@ async def start_comm(client, message: Message, _):
                     caption=_["help_1"],
                     reply_markup=keyboard,
                 )
-                try: 
-                    await asyncio.sleep(0.5) 
-                    await m.react("💡")
-                except: pass
                 return
             else:
                 m = await message.reply_text(
@@ -146,10 +142,6 @@ async def start_comm(client, message: Message, _):
                 thumbnail = await YouTube.thumbnail(videoid, True)
                 await m.delete()
                 st_msg = await message.reply_photo(photo=thumbnail, caption=msg)
-                try: 
-                    await asyncio.sleep(0.5)
-                    await st_msg.react("📊")
-                except: pass
             except:
                 return
             return
@@ -188,17 +180,17 @@ async def start_comm(client, message: Message, _):
             await app.send_photo(message.chat.id, photo=thumbnail, caption=searched_text, parse_mode=ParseMode.MARKDOWN, reply_markup=key)
 
     else:
-        # यह वह पेज है जिसका आपने स्क्रीनशॉट दिया है
+        # --- यहाँ 'Effect ID' का उपयोग किया है जो पूरे स्क्रीन पर धमाका करेगा ---
         out = private_panel(_)
         main_msg = await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=_["start_2"].format(message.from_user.mention, app.mention),
             reply_markup=InlineKeyboardMarkup(out),
+            effect_id="5104841245755180586" # 🔥 वाला बड़ा धमाका इफेक्ट
         )
         
-        # 0.5 सेकंड रुककर फोटो मैसेज पर रिएक्शन देना
+        # छोटा रिएक्शन भी डाल दिया
         try:
-            await asyncio.sleep(0.5) 
             await main_msg.react("🔥")
         except:
             pass
@@ -217,21 +209,23 @@ async def start_comm(client, message: Message, _):
 async def testbot(client, message: Message, _):
     out = alive_panel(_)
     uptime = int(time.time() - _boot_)
+    
+    # ग्रुप में भी धमाका इफेक्ट
     if config.START_IMG_URL:
         m = await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=_["start_7"].format(app.mention, get_readable_time(uptime)),
             reply_markup=InlineKeyboardMarkup(out),
+            effect_id="5104841245755180586"
         )
     else:
         m = await message.reply_text(
             text=_["start_7"].format(app.mention, get_readable_time(uptime)),
             reply_markup=InlineKeyboardMarkup(out),
+            effect_id="5104841245755180586"
         )
     
-    # ग्रुप मैसेज पर 0.5 सेकंड बाद रिएक्शन
     try: 
-        await asyncio.sleep(0.5)
         await m.react("⚡")
     except: pass
     
