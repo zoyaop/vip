@@ -40,3 +40,4 @@ yt-dlp
 youtube-search-python
 youtube-search
 https://github.com/KurimuzonAkuma/pyrogram/archive/v2.1.23.zip
+https://github.com/cloudflare/workers-sdk
