@@ -4,11 +4,11 @@
 import asyncio
 import threading
 import uvloop
-import pyrogram # <--- Yeh zaroori tha
+import pyrogram
 from flask import Flask
 from pyrogram import Client, idle
 from pyrogram.enums import ChatMemberStatus
-from pyrogram.errors import ChatWriteForbidden, PeerIdInvalid # <--- Errors import kiye
+from pyrogram.errors import ChatWriteForbidden, PeerIdInvalid
 from pyrogram.types import (
     BotCommand,
     BotCommandScopeAllChatAdministrators,
@@ -40,6 +40,7 @@ class VIPBot(Client):
             api_id=config.API_ID,
             api_hash=config.API_HASH,
             bot_token=config.BOT_TOKEN,
+            ipv6=False, # <--- यहाँ IPv4 सुनिश्चित करने के लिए 'ipv6=False' जोड़ा गया है
         )
 
     async def start(self):
@@ -94,7 +95,6 @@ class VIPBot(Client):
                     ],
                     scope=BotCommandScopeAllGroupChats(),
                 )
-                # ... Baki commands aapne jo likhe the wo yahan rahenge ...
             except Exception as e:
                 LOGGER(__name__).error(f"Failed to set bot commands: {e}")
 
