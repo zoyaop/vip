@@ -1,77 +1,74 @@
 from pyrogram.types import InlineKeyboardButton
+
 import config
-from config import SUPPORT_GROUP, SUPPORT_CHANNEL
+from config import SUPPORT_GROUP
 from VIPMUSIC import app
 
-# --- Start Panel (Group ke liye) ---
+
 def start_pannel(_):
     buttons = [
         [
             InlineKeyboardButton(
-                text="✨ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ✨",
+                text="💠 𝐀𝙳𝙳 𝙼𝙴 𝙸𝙽 𝙽𝙴𝚆 𝙶𝚁𝙾𝚄𝙿𝚂 💠",
                 url=f"https://t.me/{app.username}?startgroup=true",
             ),
         ],
         [
-            InlineKeyboardButton(text="🛠 ʜᴇʟᴘ", callback_data="settings_back_helper"),
-            InlineKeyboardButton(text="⚙️ sᴇᴛᴛɪɴɢs", callback_data="settings_helper"),
+            InlineKeyboardButton(text="۞ 𝐇𝙴𝙻𝙿 ۞", callback_data="settings_back_helper"),
+            InlineKeyboardButton(text="☢ 𝐒𝙴𝚃 ☢", callback_data="settings_helper"),
         ],
         [
-            InlineKeyboardButton(text="👥 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ", url=config.SUPPORT_GROUP),
+            InlineKeyboardButton(text="✡ 𝐆𝚁𝙾𝚄𝙿 ✡", url=config.SUPPORT_GROUP),
         ],
     ]
     return buttons
 
-# --- Private Panel (Bot DM ke liye) ---
+
 def private_panel(_):
     buttons = [
         [
             InlineKeyboardButton(
-                text="➕ ᴀᴅᴅ ᴍᴇ ɪɴ ɴᴇᴡ ɢʀᴏᴜᴘs ➕",
+                text="💠 𝐀𝙳𝙳 𝙼𝙴 𝙸𝙽 𝙽𝙴𝚆 𝙶𝚁𝙾𝚄𝙿𝚂 💠",
                 url=f"https://t.me/{app.username}?startgroup=true",
             )
         ],
         [
-            InlineKeyboardButton(text="📢 ᴜᴘᴅᴀᴛᴇs", url=config.SUPPORT_CHANNEL),
-            InlineKeyboardButton(text="💬 sᴜᴘᴘᴏʀᴛ", url=config.SUPPORT_GROUP),
+            InlineKeyboardButton(text="𝐆𝚁𝙾𝚄𝙿✨", url=config.SUPPORT_GROUP),
+            InlineKeyboardButton(text="𝐌ᴏʀᴇ🥀", url=config.SUPPORT_CHANNEL),
         ],
         [
-            InlineKeyboardButton(text="🕹 ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs", callback_data="settings_back_helper")
-        ],
-        [
-            InlineKeyboardButton(text="❄️ ᴅᴇᴠᴇʟᴏᴘᴇʀ ❄️", url=f"https://t.me/Your_Username_Here"), # Apna username daal sakte hain
+            InlineKeyboardButton(
+                text="۞ 𝐅𝙴𝙰𝚃𝚄𝚁𝙴𝚂 ۞", callback_data="settings_back_helper"
+            )
         ],
     ]
     return buttons
 
-# --- Alive Panel (Alive command ke liye) ---
+
 def alive_panel(_):
     buttons = [
         [
             InlineKeyboardButton(
-                text="🚀 ᴀᴅᴅ ᴍᴇ", url=f"https://t.me/{app.username}?startgroup=true"
+                text="✿︎ ᴀᴅᴅ ᴍᴇ ✿︎", url=f"https://t.me/{app.username}?startgroup=true"
             ),
-            InlineKeyboardButton(text="🌐 sᴜᴘᴘᴏʀᴛ", url=f"{SUPPORT_GROUP}"),
+            InlineKeyboardButton(text=_["S_B_3"], url=f"{SUPPORT_GROUP}"),
         ],
     ]
     return buttons
 
-# --- Music Start Panel (Music specific) ---
+
 def music_start_panel(_):
     buttons = [
         [
             InlineKeyboardButton(
-                text="🎵 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ᴄʜᴀᴛ 🎵",
+                text="💠 ᴀᴅᴅ ᴍᴇ ɪɴ ɴᴇᴡ ɢʀᴏᴜᴘ 💠",
                 url=f"https://t.me/{app.username}?startgroup=true",
             )
         ],
         [
-            InlineKeyboardButton(text="📖 ᴀʙᴏᴜᴛ", callback_data="about"),
-            InlineKeyboardButton(text="🌟 ғᴇᴀᴛᴜʀᴇs", callback_data="feature"),
+            InlineKeyboardButton(text="ᴀʙᴏᴜᴛ 📝", callback_data="about"),
+            InlineKeyboardButton(text="sᴜᴘᴘᴏʀᴛ 🥀", callback_data="support"),
         ],
-        [
-            InlineKeyboardButton(text="🛡 sᴜᴘᴘᴏʀᴛ", callback_data="support"),
-            InlineKeyboardButton(text="🥀 ᴏᴡɴᴇʀ", url=f"https://t.me/Your_Username_Here"),
-        ],
+        [InlineKeyboardButton(text="۞ ғᴇᴀᴛᴜʀᴇ ۞", callback_data="feature")],
     ]
     return buttons
