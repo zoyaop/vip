@@ -1,45 +1,44 @@
 from pyrogram.types import InlineKeyboardButton
+
 import config
-from config import SUPPORT_GROUP, SUPPORT_CHANNEL
+from config import SUPPORT_GROUP
 from VIPMUSIC import app
 
+
 def start_pannel(_):
-    """Group/Settings Start Panel - 2026 Edition"""
     buttons = [
         [
             InlineKeyboardButton(
-                text="🚀 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ᴄʟᴀɴ 🚀",
+                text="💠 𝐀𝙳𝙳 𝙼𝙴 𝙸𝙽 𝙽𝙴𝚆 𝙶𝚁𝙾𝚄𝙿𝚂 💠",
                 url=f"https://t.me/{app.username}?startgroup=true",
             ),
         ],
         [
-            InlineKeyboardButton(text="✨ ʜᴇʟᴘ", callback_data="settings_back_helper"),
-            InlineKeyboardButton(text="⚙️ sᴇᴛᴛɪɴɢs", callback_data="settings_helper"),
+            InlineKeyboardButton(text="۞ 𝐇𝙴𝙻𝙿 ۞", callback_data="settings_back_helper"),
+            InlineKeyboardButton(text="☢ 𝐒𝙴𝚃 ☢", callback_data="settings_helper"),
         ],
         [
-            InlineKeyboardButton(text="🛡️ sᴜᴘᴘᴏʀᴛ", url=config.SUPPORT_GROUP),
-            InlineKeyboardButton(text="📢 ᴜᴘᴅᴀᴛᴇs", url=config.SUPPORT_CHANNEL),
+            InlineKeyboardButton(text="✡ 𝐆𝚁𝙾𝚄𝙿 ✡", url=config.SUPPORT_GROUP),
         ],
     ]
     return buttons
 
 
 def private_panel(_):
-    """Private DM Start Panel - 2026 Edition"""
     buttons = [
         [
             InlineKeyboardButton(
-                text="➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕",
+                text="💠 𝐀𝙳𝙳 𝙼𝙴 𝙸𝙽 𝙽𝙴𝚆 𝙶𝚁𝙾𝚄𝙿𝚂 💠",
                 url=f"https://t.me/{app.username}?startgroup=true",
             )
         ],
         [
-            InlineKeyboardButton(text="💬 sᴜᴘᴘᴏʀᴛ", url=config.SUPPORT_GROUP),
-            InlineKeyboardButton(text="🚀 ᴜᴘᴅᴀᴛᴇs", url=config.SUPPORT_CHANNEL),
+            InlineKeyboardButton(text="𝐆𝚁𝙾𝚄𝙿✨", url=config.SUPPORT_GROUP),
+            InlineKeyboardButton(text="𝐌ᴏʀᴇ🥀", url=config.SUPPORT_CHANNEL),
         ],
         [
             InlineKeyboardButton(
-                text="🌌 ᴇxᴘʟᴏʀᴇ ꜰᴇᴀᴛᴜʀᴇs 🌌", callback_data="feature"
+                text="۞ 𝐅𝙴𝙰𝚃𝚄𝚁𝙴𝚂 ۞", callback_data="settings_back_helper"
             )
         ],
     ]
@@ -47,33 +46,29 @@ def private_panel(_):
 
 
 def alive_panel(_):
-    """Alive/Status Panel - 2026 Edition"""
     buttons = [
         [
             InlineKeyboardButton(
-                text="✨ ɪɴᴠɪᴛᴇ ᴍᴇ", url=f"https://t.me/{app.username}?startgroup=true"
+                text="✿︎ ᴀᴅᴅ ᴍᴇ ✿︎", url=f"https://t.me/{app.username}?startgroup=true"
             ),
-            InlineKeyboardButton(text="💬 sᴜᴘᴘᴏʀᴛ", url=f"{SUPPORT_GROUP}"),
+            InlineKeyboardButton(text=_["S_B_3"], url=f"{SUPPORT_GROUP}"),
         ],
     ]
     return buttons
 
 
 def music_start_panel(_):
-    """Music Specialized Start Panel - 2026 Edition"""
     buttons = [
         [
             InlineKeyboardButton(
-                text="🎵 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🎵",
+                text="💠 ᴀᴅᴅ ᴍᴇ ɪɴ ɴᴇᴡ ɢʀᴏᴜᴘ 💠",
                 url=f"https://t.me/{app.username}?startgroup=true",
             )
         ],
         [
-            InlineKeyboardButton(text="ℹ️ ᴀʙᴏᴜᴛ", callback_data="about"),
-            InlineKeyboardButton(text="🛡️ sᴜᴘᴘᴏʀᴛ", callback_data="support"),
+            InlineKeyboardButton(text="ᴀʙᴏᴜᴛ 📝", callback_data="about"),
+            InlineKeyboardButton(text="sᴜᴘᴘᴏʀᴛ 🥀", callback_data="support"),
         ],
-        [
-            InlineKeyboardButton(text="🛸 ɴᴇᴜʀᴀʟ ꜰᴇᴀᴛᴜʀᴇs", callback_data="feature")
-        ],
+        [InlineKeyboardButton(text="۞ ғᴇᴀᴛᴜʀᴇ ۞", callback_data="feature")],
     ]
     return buttons
