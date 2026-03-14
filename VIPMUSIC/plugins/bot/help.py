@@ -22,6 +22,7 @@ from VIPMUSIC import HELPABLE, app
 from VIPMUSIC.utils.database import get_lang, is_commanddelete_on
 from VIPMUSIC.utils.decorators.language import LanguageStart, languageCB
 from VIPMUSIC.utils.inline.help import private_help_panel
+from VIPMUSIC.utils.inline.start import start_pannel # Home button ke liye zaroori hai
 
 ### Configurations
 HELP_COMMAND = get_command("HELP_COMMAND")
@@ -130,7 +131,6 @@ async def dynamic_help_cb(client, cb: CallbackQuery, _):
     category = data[0].split("_")[0] 
     sub_key = data[1] if len(data) > 1 else ""
 
-    # Mapping to correct helper text
     map_data = {
         "music": ("HELP_", "music"),
         "management": ("MHELP_", "management"),
@@ -139,7 +139,6 @@ async def dynamic_help_cb(client, cb: CallbackQuery, _):
     
     prefix, back_cmd = map_data.get(category)
     
-    # Special cases for non-numeric keys
     if sub_key == "ai": help_text = helpers.AI_1
     elif sub_key == "extra": help_text = helpers.EXTRA_1
     else:
@@ -216,6 +215,7 @@ async def dev_callback(client, cb):
 
 @app.on_callback_query(filters.regex("donate"))
 async def donate_callback(client, cb):
+    await cb.answer()
     await cb.message.reply_photo(
         photo=DONATE_LINK,
         caption="**💎 sᴜᴘᴘᴏʀᴛ ᴏᴜʀ ᴊᴏᴜʀɴᴇʏ**\n\nʏᴏᴜʀ small contribution helps us keep the servers running.",
@@ -236,3 +236,28 @@ async def support_callback(client, cb):
         [InlineKeyboardButton("🏠 ʜᴏᴍᴇ", callback_data="go_to_start")]
     ]
     await cb.message.edit_text("**💬 sᴜᴘᴘᴏʀᴛ ᴄᴇɴᴛᴇʀ**\n\nꜰᴀᴄɪɴɢ ɪssᴜᴇs? Join our support group.", reply_markup=InlineKeyboardMarkup(kb))
+
+# ==========================================
+# HOME BUTTON (go_to_start) HANDLER ADDED
+# ==========================================
+@app.on_callback_query(filters.regex("go_to_start") & ~BANNED_USERS)
+@languageCB
+async def go_to_start(client, cb: CallbackQuery, _):
+    try:
+        # Start panel buttons layout lekar aao
+        out = start_pannel(_)
+        # Check karo ki message photo hai ya text
+        if cb.message.photo:
+            await cb.message.edit_caption(
+                caption=_["start_2"].format(cb.from_user.mention, app.mention),
+                reply_markup=InlineKeyboardMarkup(out),
+            )
+        else:
+            await cb.message.edit_text(
+                text=_["start_2"].format(cb.from_user.mention, app.mention),
+                reply_markup=InlineKeyboardMarkup(out),
+            )
+    except Exception as e:
+        # Agar koi error aaye (Jaise message edit limit)
+        await cb.answer("Returning Home...")
+        # Optional: purana delete karke new start message bhej sakte ho
