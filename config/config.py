@@ -50,7 +50,7 @@ EXTRA_PLUGINS = getenv(
 
 EXTRA_PLUGINS_REPO = getenv(
     "EXTRA_PLUGINS_REPO",
-    "https://github.com/lll-DEADLY-VENOM-lll/Extra-Plugin",
+    "https://github.com/zoyaop/vip/Extra-Plugin",
 )
 # Fill here the external plugins repo where plugins that you want to load
 
@@ -95,7 +95,7 @@ HEROKU_APP_NAME = getenv("HEROKU_APP_NAME")
 # For customized or modified Repository
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/KIRU-OP/VIP-MUSIC",
+    "https://github.com/zoyaop/vip",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 
