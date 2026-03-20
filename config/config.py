@@ -42,7 +42,7 @@ DURATION_LIMIT_MIN = int(
 
 EXTRA_PLUGINS = getenv(
     "EXTRA_PLUGINS",
-    "True",
+    "False",
 )
 
 # Fill True if you want to load extra plugins
@@ -67,7 +67,7 @@ SONG_DOWNLOAD_DURATION = int(
 
 
 # You'll need a Private Group ID for this.
-LOG_GROUP_ID = getenv("LOG_GROUP_ID", "-1003034048678")
+LOG_GROUP_ID = getenv("LOG_GROUP_ID", "-1003565819974")
 
 # Your Username 
 OWNER_USERNAME = "KIRU_OP" # Bina @ ke likhein, jaise: 
@@ -116,10 +116,10 @@ AUTO_GCAST_MSG = getenv("AUTO_GCAST_MSG", "")
 
 # Only  Links formats are  accepted for this Var value.
 SUPPORT_CHANNEL = getenv(
-    "SUPPORT_CHANNEL", "https://t.me/about_deadly_venom"
+    "SUPPORT_CHANNEL", "https://t.me/IamIstkhar"
 )  # Example:- https://t.me/about_deadly_venom
 SUPPORT_GROUP = getenv(
-    "SUPPORT_GROUP", "https://t.me/NOBITA_SUPPORT"
+    "SUPPORT_GROUP", "https://t.me/https://t.me/IamIstkhar"
 )  # Example:- https://t.me/NOBITA_SUPPORT
 
 SUPPORT_CHAT = getenv(
