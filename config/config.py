@@ -22,7 +22,8 @@ API_ID = int(getenv("API_ID", ""))
 
 API_HASH = getenv("API_HASH")
 
-
+BASE_URL = getenv("API_URL", 'https://BabyAPI.Pro') 
+API_KEY = getenv('API_KEY', 'ADMINBABYX20F56755E70E0694DDCC844F5F1BB465') 
 ## Get it from @Botfather in Telegram.
 BOT_TOKEN = getenv("BOT_TOKEN")
 
