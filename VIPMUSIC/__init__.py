@@ -8,7 +8,7 @@ from VIPMUSIC.core.userbot import Userbot
 from VIPMUSIC.core.youtube import vipboy
 from VIPMUSIC.misc import dbb, heroku, sudo
 
-from .logging import LOGGER_ID= -1003565819974
+LOGGER_ID = -1003565819974
 
 dirr()
 
