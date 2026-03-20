@@ -10,8 +10,8 @@ from VIPMUSIC.utils.formatters import time_to_seconds
 import aiohttp
 from VIPMUSIC import LOGGER
 
-API_URL = "https://shrutibots.site"
-DOWNLOAD_DIR = "downloads"
+API_URL = "https://teaminflex.xyz"  # <-- Keep as is unless bot provides a different URL
+API_KEY = "INFLEX12562228D"  # <-- Replace this with your key from @InflexAPIBot
 
 
 async def download_song(link: str) -> str:
