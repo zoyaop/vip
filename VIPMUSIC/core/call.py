@@ -10,19 +10,19 @@ from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
 
 import config
-from ISTKHAR_MUSIC  import LOGGER, YouTube, app
-from ISTKHAR_MUSIC .misc import db
-from ISTKHAR_MUSIC .utils.database import (add_active_chat, add_active_video_chat,
+from VIPMUSIC  import LOGGER, YouTube, app
+from VIPMUSIC .misc import db
+from VIPMUSIC .utils.database import (add_active_chat, add_active_video_chat,
                                        get_lang, get_loop, group_assistant,
                                        is_autoend, music_on,
                                        remove_active_chat,
                                        remove_active_video_chat, set_loop)
-from ISTKHAR_MUSIC .utils.exceptions import AssistantErr
-from ISTKHAR_MUSIC .utils.formatters import (check_duration, seconds_to_min,
+from VIPMUSIC .utils.exceptions import AssistantErr
+from VIPMUSIC .utils.formatters import (check_duration, seconds_to_min,
                                          speed_converter)
-from ISTKHAR_MUSIC .utils.inline.play import stream_markup
-from ISTKHAR_MUSIC .utils.stream.autoclear import auto_clean
-from ISTKHAR_MUSIC .utils.thumbnails import get_thumb
+from VIPMUSIC .utils.inline.play import stream_markup
+from VIPMUSIC .utils.stream.autoclear import auto_clean
+from VIPMUSIC .utils.thumbnails import get_thumb
 from strings import get_string
 
 
@@ -599,4 +599,4 @@ class Call(PyTgCalls):
                         await self.stop_stream(update.chat_id)
 
 
-ISTKHAR = Call()
+VIP = Call()
