@@ -600,3 +600,6 @@ class Call(PyTgCalls):
 
 
 VIP = Call()
+
+def _st_(*args, **kwargs):
+    return
